@@ -11,6 +11,7 @@ import attentions
 from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
 from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
 from commons import init_weights, get_padding
+from subsampling import ConvSubsampling
 
 
 class StochasticDurationPredictor(nn.Module):
@@ -446,7 +447,7 @@ class AudioDecoder(torch.nn.Module):
     self.kernel_size = kernel_size
     self.p_dropout = p_dropout
 
-    #self.emb = nn.Embedding(n_vocab, hidden_channels)
+    self.emb = nn.Linear(n_vocab, hidden_channels)
     #nn.init.normal_(self.emb.weight, 0.0, hidden_channels**-0.5)
 
     self.decoder = attentions.Decoder(
@@ -459,7 +460,7 @@ class AudioDecoder(torch.nn.Module):
     self.proj= nn.Conv1d(hidden_channels, n_vocab, 1)
 
   def forward(self, x, x_lengths, h, h_mask):
-    x = x * math.sqrt(self.hidden_channels) # [b, t, h]
+    x = self.emb(x) * math.sqrt(self.hidden_channels) # [b, t, h]
     x = torch.transpose(x, 1, -1) # [b, h, t]
     x_mask = torch.unsqueeze(commons.sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
 
@@ -472,7 +473,7 @@ class AudioDecoder(torch.nn.Module):
     return out, x_mask
 
 class AttentionEncoderDecoder(torch.nn.Module):
-    def __init__()
+    def __init__(self):
         super().__init__()
         n_vocab = 5000
         hidden_channels = 512
@@ -481,7 +482,27 @@ class AttentionEncoderDecoder(torch.nn.Module):
         n_layers = 6
         kernel_size = 1
         p_dropout = 0.1
+
+        subsampling='striding'
+        subsampling_factor = 4
+        feat_in = 80
+        d_model = 512
+        subsampling_conv_channels = 512
+        subsampling_conv_chunking_factor = -1
+        causal_downsampling = False
         #self.emb = nn.Embedding(n_vocab, n_vocab)
+
+        self.pre_encode = ConvSubsampling(
+            subsampling=subsampling,
+            subsampling_factor=subsampling_factor,
+            feat_in=feat_in,
+            feat_out=d_model,
+            conv_channels=subsampling_conv_channels,
+            subsampling_conv_chunking_factor=subsampling_conv_chunking_factor,
+            activation=nn.ReLU(True),
+            is_causal=causal_downsampling,
+        )
+
         self.encoder = AudioEncoder(
             hidden_channels,
             filter_channels,
@@ -496,14 +517,18 @@ class AttentionEncoderDecoder(torch.nn.Module):
             n_heads,
             n_layers,
             kernel_size,
-            p_dropout):
+            p_dropout)
             
-    def forward(self,x,y):
+    def forward(self, x, x_lengths, y, y_lengths):
         # x [B, T ,H]
         # y [B, T, U]
 
-        h, h_mask = self.encoder(x, x_length)
-        out, out_mask = self.decoder(y, y_length , h, h_mask)
+        x, x_lengths = self.pre_encode(x,x_lengths)
+        print('========== preencode out lengths========',x_lengths)
+        h, h_mask = self.encoder(x, x_lengths)
+        print(h,h.size())
+        out, out_mask = self.decoder(y, y_lengths , h, h_mask)
+        return out
 
     #def infer(self,x):
 
