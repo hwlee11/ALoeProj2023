@@ -10,7 +10,7 @@ import torch.nn.init as init
 from astropy.modeling import ParameterError
 
 from modules.vocab import Vocabulary
-from AED import AttentionEncoderDecoder
+from modules.AED import AttentionEncoderDecoder
 
 
 class Swish(nn.Module):
@@ -541,8 +541,8 @@ def build_deepspeech2(
         device=device,
     )).to(device)
 
-def build_AED()
-    return nn.DataParallel(AED()).to(device)
+def build_AED(device):
+    return nn.DataParallel(AttentionEncoderDecoder()).to(device)
 
 def build_model(
         config,
@@ -565,5 +565,5 @@ def build_model(
         device=device,
     )
     """
-    model = build_AED()
+    model = build_AED(device)
     return model
