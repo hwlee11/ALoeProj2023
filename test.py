@@ -1,4 +1,4 @@
-from AED import AttentionEncoderDecoder
+from modules.AED import AttentionEncoderDecoder
 import torch
 
 
@@ -7,7 +7,7 @@ print(aed)
 
 input = torch.rand(2,500,80)
 x_lengths = torch.tensor([198,500])
-label = torch.rand(2, 30,5000)
+label = torch.rand(2, 30,2000)
 label_lengths = torch.tensor([14,30])
 out = aed(input, x_lengths, label, label_lengths)
 print(out,out.size())
