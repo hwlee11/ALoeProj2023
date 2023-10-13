@@ -108,7 +108,8 @@ if __name__ == '__main__':
     args.add_argument('--lr_scheduler', type=str, default='tri_stage_lr_scheduler')
     args.add_argument('--total_steps', type=int, default=200000)
 
-    args.add_argument('--architecture', type=str, default='deepspeech2')
+    #args.add_argument('--architecture', type=str, default='deepspeech2')
+    #args.add_argument('--architecture', type=str, default='ALoeAED')
     args.add_argument('--use_bidirectional', type=bool, default=True)
     args.add_argument('--dropout', type=float, default=3e-01)
     args.add_argument('--num_encoder_layers', type=int, default=3)
@@ -151,9 +152,6 @@ if __name__ == '__main__':
     optimizer = get_optimizer(model, config)
     bind_model(model, optimizer=optimizer)
     metric = get_metric(metric_name='CER', vocab=vocab)
-    print(model)
-    print('debuging end ----------------------------')
-    exit()
 
     if config.pause:
         nova.paused(scope=locals())
