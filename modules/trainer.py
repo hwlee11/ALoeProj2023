@@ -45,14 +45,13 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
         model = model.to(device)
 
         if mode == 'train':
-            outputs, output_lengths = model(inputs, input_lengths)
+            outputs, output_mask = model(inputs, input_lengths, targets, target_lengths)
+            logp = torch.nn.functional.log_softmax(outputs,dim=1)#.squeeze(-1) # [B, T]
             loss = criterion(
-                outputs.transpose(0, 1),
-                targets[:, 1:],
-                tuple(output_lengths),
-                tuple(target_lengths)
+                logp,
+                targets,
             )
-            y_hats = outputs.max(-1)[1]
+            y_hats = logp.max(1)[1]
 
         elif mode == 'valid':
             outputs, output_lengths = model.encoder_forward(inputs, input_legnths)
@@ -62,7 +61,6 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
             optimizer.zero_grad()
             loss.backward()
             optimizer.step(model)
-        elif mode == 'valid':
 
         total_num += int(input_lengths.sum())
         epoch_loss_total += loss.item()
@@ -78,7 +76,7 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
             cer = metric(targets[:, 1:], y_hats)
             print(log_format.format(
                 cnt, len(dataloader), loss,
-                elapsed, epoch_elapsed, train_elapsed,
+                cer, elapsed, epoch_elapsed, train_elapsed,
                 optimizer.get_lr(),
             ))
         cnt += 1
