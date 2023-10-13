@@ -25,7 +25,10 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
         target_lengths = torch.as_tensor(target_lengths).to(device)
         model = model.to(device)
 
-        outputs, output_lengths = model(inputs, input_lengths)
+        if mode == 'train':
+            outputs, output_lengths = model(inputs, input_lengths)
+        elif mode == 'valid':
+            outputs, output_lengths = model.infer(inputs,input_legnths)
 
         loss = criterion(
             outputs.transpose(0, 1),
@@ -34,12 +37,13 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
             tuple(target_lengths)
         )
 
-        y_hats = outputs.max(-1)[1]
+        #y_hats = outputs.max(-1)[1]
 
         if mode == 'train':
             optimizer.zero_grad()
             loss.backward()
             optimizer.step(model)
+        elif mode == 'valid':
 
         total_num += int(input_lengths.sum())
         epoch_loss_total += loss.item()
@@ -52,11 +56,11 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
             elapsed = current_time - begin_time
             epoch_elapsed = (current_time - epoch_begin_time) / 60.0
             train_elapsed = (current_time - train_begin_time) / 3600.0
-            cer = metric(targets[:, 1:], y_hats)
+            #cer = metric(targets[:, 1:], y_hats)
             print(log_format.format(
                 cnt, len(dataloader), loss,
-                cer, elapsed, epoch_elapsed, train_elapsed,
+                elapsed, epoch_elapsed, train_elapsed,
                 optimizer.get_lr(),
             ))
         cnt += 1
-    return model, epoch_loss_total/len(dataloader), metric(targets[:, 1:], y_hats)
+    return model, epoch_loss_total/len(dataloader)#, metric(targets[:, 1:], y_hats)

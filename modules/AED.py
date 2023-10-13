@@ -447,7 +447,13 @@ class AudioDecoder(torch.nn.Module):
     self.kernel_size = kernel_size
     self.p_dropout = p_dropout
 
-    self.emb = nn.Linear(n_vocab, hidden_channels)
+    #self.emb = nn.Linear(n_vocab, hidden_channels)
+    self.emb = torch.nn.Sequential(
+            nn.Linear(n_vocab, hidden_channels),
+            nn.LayerNorm(hidden_channels),
+            nn.Dropout(p_dropout),
+            nn.ReLU(),
+            )
     #nn.init.normal_(self.emb.weight, 0.0, hidden_channels**-0.5)
 
     self.decoder = attentions.Decoder(
@@ -475,7 +481,7 @@ class AudioDecoder(torch.nn.Module):
 class AttentionEncoderDecoder(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        n_vocab = 5000
+        n_vocab = 2000
         hidden_channels = 512
         filter_channels = 512
         n_heads = 8
@@ -530,5 +536,6 @@ class AttentionEncoderDecoder(torch.nn.Module):
         out, out_mask = self.decoder(y, y_lengths , h, h_mask)
         return out
 
-    #def infer(self,x):
+    def infer(self,x):
+        pass
 

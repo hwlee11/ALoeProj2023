@@ -151,6 +151,9 @@ if __name__ == '__main__':
     optimizer = get_optimizer(model, config)
     bind_model(model, optimizer=optimizer)
     metric = get_metric(metric_name='CER', vocab=vocab)
+    print(model)
+    print('debuging end ----------------------------')
+    exit()
 
     if config.pause:
         nova.paused(scope=locals())
@@ -184,7 +187,8 @@ if __name__ == '__main__':
                 num_workers=config.num_workers
             )
 
-            model, train_loss, train_cer = trainer(
+            #model, train_loss, train_cer = trainer(
+            model, train_loss = trainer(
                 'train',
                 config,
                 train_loader,
@@ -208,7 +212,8 @@ if __name__ == '__main__':
                 num_workers=config.num_workers
             )
 
-            model, valid_loss, valid_cer = trainer(
+            #model, valid_loss, valid_cer = trainer(
+            model, valid_loss = trainer(
                 'valid',
                 config,
                 valid_loader,
