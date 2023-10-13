@@ -10,7 +10,7 @@ from modules import attentions
 
 from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
 from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
-from modules.commons import init_weights, get_padding
+from modules.commons import init_weights, get_padding, subsequent_mask
 from modules.subsampling import ConvSubsampling
 
 
@@ -447,13 +447,15 @@ class AudioDecoder(torch.nn.Module):
     self.kernel_size = kernel_size
     self.p_dropout = p_dropout
 
-    #self.emb = nn.Linear(n_vocab, hidden_channels)
+    self.emb = nn.Embedding(n_vocab, hidden_channels)
+    """
     self.emb = torch.nn.Sequential(
             nn.Linear(n_vocab, hidden_channels),
             nn.LayerNorm(hidden_channels),
             nn.Dropout(p_dropout),
             nn.ReLU(),
             )
+    """
     #nn.init.normal_(self.emb.weight, 0.0, hidden_channels**-0.5)
 
     self.decoder = attentions.Decoder(
@@ -527,15 +529,41 @@ class AttentionEncoderDecoder(torch.nn.Module):
             
     def forward(self, x, x_lengths, y, y_lengths):
         # x [B, T ,H]
-        # y [B, T, U]
+        # y [B, T]
 
         x, x_lengths = self.pre_encode(x,x_lengths)
-        print('========== preencode out lengths========',x_lengths)
         h, h_mask = self.encoder(x, x_lengths)
-        print(h,h.size())
         out, out_mask = self.decoder(y, y_lengths , h, h_mask)
-        return out
+        return out, out_mask
 
-    def infer(self,x):
-        pass
+    @torch.no_grad()
+    def encoder_forward(self, x, x_lengths):
+
+        x, x_lengths = self.pre_encode(x,x_lengths)
+        h, h_mask = self.encoder(x, x_lengths)
+        return h, h_mask
+
+    @torch.no_grad()
+    def decode_one_step(self, tokens, tokens_lengths, h, h_mask):
+
+        # tokens [B, T]
+        #tokens_mask = subsequent_mask(tokens.size(-1), device=h.device).unsqueeze(0)
+        #tokens_mask = torch.unsqueeze(commons.sequence_mask(tokens_lengths, tokens.size(1)), 1).to(tokens.dtype)
+        #print(tokens_mask, tokens_mask.size())
+        #tokens_mask = subsequent_mask(tokens.size(-1)).unsqueeze(0)
+        out, out_mask = self.decoder(tokens, tokens_lengths, h, h_mask)
+
+        return out, out_mask
+
+        
+
+
+
+
+
+
+
+
+
+
 
