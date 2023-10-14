@@ -1,23 +1,25 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
 import math
 from dataclasses import dataclass
 import time
 from nova import DATASET_PATH
 
-def greedy_scoring(model, h, h_mask, device, sos=1, eos=2):
+def greedy_scoring(model, criterion, h, h_mask, targets, device, sos=1, eos=2):
 
     batchSize, _, T = h.size()
-    tokens = torch.tensor([sos] * batchSize).to(device)
+    tokens = torch.tensor([[sos]] * batchSize).to(device)
     token_lengths = torch.tensor([1]*batchSize).to(device)
-    sum_logprobs = torch.zeros(2,2000).to(device)
+    sum_logprobs = torch.zeros(batchSize,2000).to(device)
     for i in range(T):
-        out, out_mask = model.decode_one_step(tokens, token_lengths, h, h_mask)
-        next_token = out.argmax(dim=1)
+        out, out_mask = model.module.decode_one_step(tokens, token_lengths, h, h_mask)
+        next_token = out[:,:,-1:].argmax(dim=1)
         logprobs = F.log_softmax(out[:,:,-1:],dim=1).squeeze(-1)
         sum_logprobs += logprobs.squeeze(0)
 
         next_token[tokens[:, -1] == eos] = eos
+        print(tokens.size(),next_token.size())
         tokens = torch.cat([tokens,next_token],dim=-1)
         endOfDecode = (tokens[:,-1] == eos).all()
         if endOfDecode:
@@ -54,8 +56,8 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
             y_hats = logp.max(1)[1]
 
         elif mode == 'valid':
-            outputs, output_lengths = model.encoder_forward(inputs, input_legnths)
-            y_hats, loss = greedy_scoring(model, outputs, outputs_lengths, device)
+            outputs, output_lengths = model.module.encoder_forward(inputs, input_lengths)
+            y_hats, loss = greedy_scoring(model, criterion, outputs, output_lengths, targets, device)
 
         if mode == 'train':
             optimizer.zero_grad()
@@ -79,5 +81,7 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
                 cer, elapsed, epoch_elapsed, train_elapsed,
                 optimizer.get_lr(),
             ))
+            if cnt == 50:
+                break
         cnt += 1
     return model, epoch_loss_total/len(dataloader), metric(targets[:, 1:], y_hats)
