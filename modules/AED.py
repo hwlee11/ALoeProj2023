@@ -527,13 +527,19 @@ class AttentionEncoderDecoder(torch.nn.Module):
             kernel_size,
             p_dropout)
             
-    def forward(self, x, x_lengths, y, y_lengths):
+    def forward(self, x, x_lengths, y, y_lengths, device):
         # x [B, T ,H]
         # y [B, T]
 
         x, x_lengths = self.pre_encode(x,x_lengths)
         h, h_mask = self.encoder(x, x_lengths)
-        out, out_mask = self.decoder(y, y_lengths , h, h_mask)
+
+        # cat sos tokens
+        sosTensor = torch.ones([h.size()[0],1],dtype=torch.int64).to(y.device)
+        y = torch.cat([sosTensor,y],dim=-1)
+
+        # text decoder
+        out, out_mask = self.decoder(y[:,:-1], y_lengths , h, h_mask)
         return out, out_mask
 
     @torch.no_grad()

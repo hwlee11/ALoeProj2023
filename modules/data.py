@@ -79,7 +79,7 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
         tokens = transcript.split(' ')
         transcript = list()
 
-        transcript.append(int(self.sos_id))
+        #transcript.append(int(self.sos_id))
         for token in tokens:
             try:
                 transcript.append(int(token))
