@@ -527,7 +527,7 @@ class AttentionEncoderDecoder(torch.nn.Module):
             kernel_size,
             p_dropout)
             
-    def forward(self, x, x_lengths, y, y_lengths, device):
+    def forward(self, x, x_lengths, y, y_lengths, device='cpu'):
         # x [B, T ,H]
         # y [B, T]
 

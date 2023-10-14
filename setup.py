@@ -16,7 +16,8 @@ setup(
         'sentencepiece',
         'torchaudio==0.6.0',
         'pydub',
-        'glob2'
+        'glob2',
+        'sentencepiece'
     ],
 )
 

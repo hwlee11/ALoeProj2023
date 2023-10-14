@@ -1,4 +1,9 @@
+import torch
 from torch.optim.lr_scheduler import _LRScheduler
+from torch.optim.optimizer import Optimizer
+from torch.optim import Adam
+
+from typing import Union
 
 #class WarmupStepLR(_LRScheduler, AbsBatchStepScheduler):
 class WarmupStepLR(_LRScheduler):
@@ -31,7 +36,7 @@ class WarmupStepLR(_LRScheduler):
         gamma: float = 0.1,
         last_epoch: int = -1,
     ):
-        assert check_argument_types()
+        #assert check_argument_types()
         self.warmup_steps = warmup_steps
 
         self.step_num = 0
@@ -73,3 +78,11 @@ class WarmupStepLR(_LRScheduler):
                 * self.gamma ** ((self.epoch_num - self.warmup_epoch) // self.step_size)
                 for lr in self.base_lrs
             ]
+
+if __name__ == '__main__':
+
+    m = torch.nn.Linear(10,10)
+    optim = Adam(m.parameters())
+    lrSchduler = WarmupStepLR(optim)
+    lr = lrSchduler.get_lr()
+    print(lr)
