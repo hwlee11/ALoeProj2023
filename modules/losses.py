@@ -15,7 +15,7 @@
 import torch
 from torch import nn
 
-class NLLLoss(nn.NLLLoss, Serialization, Typing):
+class NLLLoss(nn.NLLLoss):
     """
     NLLLoss
     """
@@ -56,4 +56,12 @@ class NLLLoss(nn.NLLLoss, Serialization, Typing):
 
         loss = super().forward(log_probs_flatten, labels_flatten)
         return loss
+
+if __name__ == '__main__':
+    logp = torch.rand(2,8,10)
+    label = torch.tensor([[1,2,3,4,5,6,7,8],[8,7,6,5,4,3,3,1]])
+    criterion = NLLLoss()
+
+    loss = criterion(logp,label)
+    print(loss)
 
