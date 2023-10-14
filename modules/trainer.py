@@ -56,7 +56,8 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
                 logp,
                 targets,
             )
-            y_hats = logp.max(1)[1]
+            y_hats = logp.argmax(dim=2).squeeze(-1)
+
 
         elif mode == 'valid':
             outputs, output_lengths = model.module.encoder_forward(inputs, input_lengths)
@@ -79,13 +80,11 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
             elapsed = current_time - begin_time
             epoch_elapsed = (current_time - epoch_begin_time) / 60.0
             train_elapsed = (current_time - train_begin_time) / 3600.0
-            cer = metric(targets[:, 1:], y_hats)
+            cer = metric(targets, y_hats)
             print(log_format.format(
                 cnt, len(dataloader), loss,
                 cer, elapsed, epoch_elapsed, train_elapsed,
                 optimizer.get_lr(),
             ))
-            #if cnt == 50:
-            #    break
         cnt += 1
-    return model, epoch_loss_total/len(dataloader), metric(targets[:, 1:], y_hats)
+    return model, epoch_loss_total/len(dataloader), metric(targets, y_hats)
