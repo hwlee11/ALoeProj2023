@@ -19,7 +19,8 @@ def greedy_scoring(model, criterion, h, h_mask, targets, device, sos=1, eos=2):
         next_token = out[:,:,-1:].argmax(dim=1)
         logprobs = F.log_softmax(out[:,:,-1:],dim=1).squeeze(-1)
         #sum_logprobs += logprobs.squeeze(0)
-        loss = criterion(logprobs,targets[:,i])
+        #print(logprobs.size(),targets.size())
+        loss = criterion(logprobs,targets[:,i],out_mask.squeeze(1)[:,i])
         loss_sum +=loss.item()
         next_token[tokens[:, -1] == eos] = eos
         #print(tokens.size(),next_token.size())
@@ -28,7 +29,7 @@ def greedy_scoring(model, criterion, h, h_mask, targets, device, sos=1, eos=2):
         if endOfDecode:
             break
 
-    return tokens, loss_sum
+    return tokens, loss_sum/T
 
 def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train_begin_time, device):
 
@@ -55,6 +56,7 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
             loss = criterion(
                 logp,
                 targets,
+                output_mask
             )
             y_hats = logp.argmax(dim=2).squeeze(-1)
 
@@ -86,5 +88,7 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
                 cer, elapsed, epoch_elapsed, train_elapsed,
                 optimizer.get_lr(),
             ))
+        #if cnt == 5:
+        #    break
         cnt += 1
     return model, epoch_loss_total/len(dataloader), metric(targets, y_hats)
