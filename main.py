@@ -8,7 +8,7 @@ import json
 import argparse
 from glob import glob
 
-from modules.preprocess import preprocessing
+from modules.preprocess import preprocessing_spe
 from modules.trainer import trainer
 from modules.utils import (
     get_optimizer,
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     # Parameters 
     args.add_argument('--use_cuda', type=bool, default=True)
     args.add_argument('--seed', type=int, default=777)
-    args.add_argument('--num_epochs', type=int, default=5)
+    args.add_argument('--num_epochs', type=int, default=200)
     args.add_argument('--batch_size', type=int, default=128)
     #args.add_argument('--batch_size', type=int, default=128)
     args.add_argument('--save_result_every', type=int, default=10)
@@ -148,43 +148,54 @@ if __name__ == '__main__':
     if hasattr(config, "num_threads") and int(config.num_threads) > 0:
         torch.set_num_threads(config.num_threads)
 
-    vocab = KoreanSpeechVocabulary(os.path.join(os.getcwd(), 'labels.csv'), output_unit='character')
-    model = build_model(config, vocab, device)
+    #vocab = KoreanSpeechVocabulary(os.path.join(os.getcwd(), 'labels.csv'), output_unit='character')
+    # prepare data
+    config.dataset_path = os.path.join(DATASET_PATH, 'train', 'train_data')
+    label_path = os.path.join(DATASET_PATH, 'train', 'train_label')
+    # data preprocessing and build tokenizer
+    tokenizer = preprocessing_spe(label_path, os.getcwd())
+    vocab_size = len(tokenizer.vocab)
+
+    train_dataset, valid_dataset = split_dataset(config, os.path.join(os.getcwd(), 'transcripts.txt'))
+    # build AED model
+    model = build_model(config, vocab_size, device)
     optimizer = get_optimizer(model, config)
     bind_model(model, optimizer=optimizer)
-    metric = get_metric(metric_name='CER', vocab=vocab)
+    metric = get_metric(metric_name='CER', vocab=tokenizer)
 
     if config.pause:
         nova.paused(scope=locals())
 
     if config.mode == 'train':
 
-        config.dataset_path = os.path.join(DATASET_PATH, 'train', 'train_data')
-        label_path = os.path.join(DATASET_PATH, 'train', 'train_label')
-        preprocessing(label_path, os.getcwd())
-        train_dataset, valid_dataset = split_dataset(config, os.path.join(os.getcwd(), 'transcripts.txt'), vocab)
-
         lr_scheduler = get_lr_scheduler(config, optimizer, len(train_dataset))
         optimizer = Optimizer(optimizer, lr_scheduler, int(len(train_dataset)*config.num_epochs), config.max_grad_norm)
-        criterion = get_criterion(config, vocab)
+        criterion = get_criterion(config)
 
         num_epochs = config.num_epochs
         num_workers = config.num_workers
 
         train_begin_time = time.time()
 
-        for epoch in range(num_epochs):
-            print('[INFO] Epoch %d start' % epoch)
-
-            # train
-
-            train_loader = DataLoader(
+        train_loader = DataLoader(
                 train_dataset,
                 batch_size=config.batch_size,
                 shuffle=True,
                 collate_fn=collate_fn,
                 num_workers=config.num_workers
-            )
+        )
+        valid_loader = DataLoader(
+                valid_dataset,
+                batch_size=config.batch_size,
+                shuffle=True,
+                collate_fn=collate_fn,
+                num_workers=config.num_workers
+        )
+
+        for epoch in range(num_epochs):
+            print('[INFO] Epoch %d start' % epoch)
+
+            # train
 
             model, train_loss, train_cer = trainer(
                 'train',
@@ -195,6 +206,7 @@ if __name__ == '__main__':
                 criterion,
                 metric,
                 train_begin_time,
+                tokenizer,
                 device
             )
 
@@ -202,13 +214,6 @@ if __name__ == '__main__':
 
             # valid
 
-            valid_loader = DataLoader(
-                valid_dataset,
-                batch_size=config.batch_size,
-                shuffle=True,
-                collate_fn=collate_fn,
-                num_workers=config.num_workers
-            )
 
             model, valid_loss, valid_cer = trainer(
                 'valid',
@@ -219,6 +224,7 @@ if __name__ == '__main__':
                 criterion,
                 metric,
                 train_begin_time,
+                tokenizer,
                 device
             )
 

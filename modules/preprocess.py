@@ -115,13 +115,40 @@ def generate_character_script(data_df, labels_dest):
             char_id_transcript = sentence_to_target(transcript, char2id)
             f.write(f'{audio_path}\t{transcript}\t{char_id_transcript}\n')
 
+def generate_script(data_df, labels_dest):
+    print('[INFO] create_script started..')
+
+    with open(os.path.join(labels_dest,"alltext.txt"), "w+") as f:
+        for audio_path, transcript in data_df.values:
+            f.write(f'{transcript}\n')
+
+def generate_spe_script_pd(data_df, spe_model):
+    print('[INFO] create_script started..')
+
+    with open(os.path.join(os.getcwd(),"transcripts.txt"), "w+") as f:
+        for audio_path, transcript in data_df.values:
+            #char_id_transcript = spe_model(transcript, char2id)
+            spe_id_list = spe_model.text_to_ids(transcript)
+            spe_id_transcript = ' '.join(map(str,spe_id_list))
+            f.write(f'{audio_path}\t{transcript}\t{spe_id_transcript}\n')
 
 def preprocessing(transcripts_dest, labels_dest):
     transcript_df = pd.read_csv(transcripts_dest)
     generate_character_script(transcript_df, labels_dest)
 
     print('[INFO] Preprocessing is Done')
+
+def preprocessing_spe(transcripts_dest, labels_dest):
+    transcript_df = pd.read_csv(transcripts_dest)
+    generate_script(transcript_df, labels_dest)
+    # build spe
+    build_spe_model(labels_dest,'alltext.txt')
+    spe_model = SentencePieceTokenizer(os.path.join(os.getcwd(),'tokenizer_spe_unigram_v5000_bos_eos/tokenizer.model'))
+    generate_spe_script_pd(transcript_df, spe_model)
+
+    print('[INFO] Preprocessing is Done')
     #return tokenizer
+    return spe_model
 
 def json_parse(path):
     data_dict = dict()
@@ -153,7 +180,7 @@ def json_parse(path):
 
     return data_dict
 
-def generate_spe_script(data_dict, spe_model):
+def generate_spe_script_dict(data_dict, spe_model):
     print('[INFO] create_script started..')
 
     with open(os.path.join(os.getcwd(),"transcripts.txt"), "w+") as f:
@@ -172,7 +199,7 @@ def preprocessing_test(transcripts_dest, labels_dest):
     # build spe
     build_spe_model('/workspace/ALoeProj2023/temp','./text.txt')
     spe_model = SentencePieceTokenizer(os.path.join(os.getcwd(),'temp/tokenizer_spe_unigram_v5000_bos_eos/tokenizer.model'))
-    generate_spe_script(data_dict, spe_model)
+    generate_spe_script_dict(data_dict, spe_model)
     # gen label script
 
     #generate_character_script(transcript_df, labels_dest)
