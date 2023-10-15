@@ -481,23 +481,23 @@ class AudioDecoder(torch.nn.Module):
     return out, x_mask
 
 class AttentionEncoderDecoder(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-        n_vocab = 2000
-        hidden_channels = 512
-        filter_channels = 512
-        n_heads = 8
-        n_layers = 6
-        kernel_size = 1
-        p_dropout = 0.1
-
-        subsampling='striding'
-        subsampling_factor = 4
-        feat_in = 80
-        d_model = 512
-        subsampling_conv_channels = 512
-        subsampling_conv_chunking_factor = -1
+    def __init__(self,
+        n_vocab = 5000,
+        hidden_channels = 512,
+        filter_channels = 512,
+        n_heads = 8,
+        n_layers = 6,
+        kernel_size = 1,
+        p_dropout = 0.1,
+        subsampling='striding',
+        subsampling_factor = 4,
+        feat_in = 80,
+        d_model = 512,
+        subsampling_conv_channels = 512,
+        subsampling_conv_chunking_factor = -1,
         causal_downsampling = False
+        ):
+        super().__init__()
         #self.emb = nn.Embedding(n_vocab, n_vocab)
 
         self.pre_encode = ConvSubsampling(

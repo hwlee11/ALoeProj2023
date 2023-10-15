@@ -157,7 +157,7 @@ def load_dataset(transcripts_path):
     return audio_paths, transcripts
 
 
-def split_dataset(config, transcripts_path: str, vocab: Vocabulary, valid_size=.2):
+def split_dataset(config, transcripts_path: str, sos_id=1, eos_id=2, valid_size=.2):
     """
     split into training set and validation set.
 
@@ -193,7 +193,7 @@ def split_dataset(config, transcripts_path: str, vocab: Vocabulary, valid_size=.
     train_dataset = SpectrogramDataset(
         train_audio_paths,
         train_transcripts,
-        vocab.sos_id, vocab.eos_id,
+        sos_id, eos_id,
         config=config,
         spec_augment=config.spec_augment,
         dataset_path=config.dataset_path,
@@ -203,7 +203,7 @@ def split_dataset(config, transcripts_path: str, vocab: Vocabulary, valid_size=.
     valid_dataset = SpectrogramDataset(
         valid_audio_paths,
         valid_transcripts,
-        vocab.sos_id, vocab.eos_id,
+        sos_id, eos_id,
         config=config,
         spec_augment=config.spec_augment,
         dataset_path=config.dataset_path,

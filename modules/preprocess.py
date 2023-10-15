@@ -2,6 +2,11 @@ import re
 import os
 import pandas as pd
 
+import json
+from modules.process_asr_text_tokenizer import build_spe_model
+from modules.sentencepiece_tokenizer import SentencePieceTokenizer
+
+
 
 def bracket_filter(sentence, mode='phonetic'):
     new_sentence = str()
@@ -116,3 +121,64 @@ def preprocessing(transcripts_dest, labels_dest):
     generate_character_script(transcript_df, labels_dest)
 
     print('[INFO] Preprocessing is Done')
+    #return tokenizer
+
+def json_parse(path):
+    data_dict = dict()
+    f = open(path)
+    while True:
+        line = f.readline()
+        if line == "":
+            break
+        line = line.rstrip()
+        pJ = open(line)
+        json_data_dict = json.load(pJ)
+        fileId = json_data_dict['발화정보']['scriptId']
+        label = json_data_dict['발화정보']['stt']
+        audioPath = json_data_dict['발화정보']['fileNm']
+        if label.find("FP") != -1:
+            continue
+        data_dict[fileId] = (label,audioPath)
+        pJ.close()
+
+    print(os.path.join(os.getcwd(),"text.txt"))
+    #with open(os.path.join(os.getcwd(),"transcripts.txt"), "w+") as ff:
+    with open(os.path.join(os.getcwd(),"text.txt"), "w+") as ff:
+        #for audio_path, transcript in data_df.values:
+        fileIds = data_dict.keys()
+        for i in fileIds:
+            transcript, audio_path = data_dict[i]
+            ff.write(f'{transcript}\n')
+    f.close()
+
+    return data_dict
+
+def generate_spe_script(data_dict, spe_model):
+    print('[INFO] create_script started..')
+
+    with open(os.path.join(os.getcwd(),"transcripts.txt"), "w+") as f:
+        fileIds = data_dict.keys()
+        for i in fileIds:
+            transcript, audio_path = data_dict[i]
+            spe_id_list = spe_model.text_to_ids(transcript)
+            spe_id_transcript = ' '.join(map(str,spe_id_list))
+            f.write(f'{audio_path}\t{transcript}\t{spe_id_transcript}\n')
+
+def preprocessing_test(transcripts_dest, labels_dest):
+    #transcript_df = pd.read_csv(transcripts_dest)
+    # prepare data
+    data_dict = json_parse(transcripts_dest)
+    
+    # build spe
+    build_spe_model('/workspace/ALoeProj2023/temp','./text.txt')
+    spe_model = SentencePieceTokenizer(os.path.join(os.getcwd(),'temp/tokenizer_spe_unigram_v5000_bos_eos/tokenizer.model'))
+    generate_spe_script(data_dict, spe_model)
+    # gen label script
+
+    #generate_character_script(transcript_df, labels_dest)
+
+    print('[INFO] Preprocessing is Done')
+    return spe_model
+
+
+

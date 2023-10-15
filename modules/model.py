@@ -541,12 +541,12 @@ def build_deepspeech2(
         device=device,
     )).to(device)
 
-def build_AED(device):
-    return nn.DataParallel(AttentionEncoderDecoder()).to(device)
+def build_AED(vocab,device):
+    return nn.DataParallel(AttentionEncoderDecoder(vocab)).to(device)
 
 def build_model(
         config,
-        vocab: Vocabulary,
+        vocab: int,
         device: torch.device,
 ) -> nn.DataParallel:
 
@@ -565,5 +565,5 @@ def build_model(
         device=device,
     )
     """
-    model = build_AED(device)
+    model = build_AED(vocab,device)
     return model

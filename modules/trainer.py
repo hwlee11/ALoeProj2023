@@ -4,7 +4,8 @@ import numpy as np
 import math
 from dataclasses import dataclass
 import time
-from nova import DATASET_PATH
+
+#torch.set_printoptions(edgeitems=300)
 
 def greedy_scoring(model, criterion, h, h_mask, targets, device, sos=1, eos=2):
 
@@ -12,26 +13,52 @@ def greedy_scoring(model, criterion, h, h_mask, targets, device, sos=1, eos=2):
     batchSize, T = targets.size()
     tokens = torch.tensor([[sos]] * batchSize).to(device)
     token_lengths = torch.tensor([1]*batchSize).to(device)
-    out_logprobs = torch.zeros(batchSize,2000).to(device)
+    #out_logprobs = torch.zeros(batchSize,2000).to(device)
     loss_sum = 0
-    for i in range(T):
+    #print('targets',targets)
+    for i in range(T+10):
         out, out_mask = model.module.decode_one_step(tokens, token_lengths, h, h_mask)
+        #print('out mask',out_mask.size())
         next_token = out[:,:,-1:].argmax(dim=1)
         logprobs = F.log_softmax(out[:,:,-1:],dim=1).squeeze(-1)
+        #print(logprobs[:,2])
+        #sum_logprobs += logprobs.squeeze(0)
+        #loss = criterion(logprobs,targets[:,i],out_mask.squeeze(1)[:,i])
+        #loss_sum +=loss.item()
+        next_token[tokens[:, -1] == eos] = eos
+        #print(tokens[:,-1] != eos)
+        token_lengths[tokens[:,-1] != eos]+=1
+        tokens = torch.cat([tokens,next_token],dim=-1)
+        endOfDecode = (tokens[:,-1] == eos).all()
+        if endOfDecode:
+            break
+    """
+    for i in range(T):
+        print(tokens[0])
+        out, out_mask = model.module.decode_one_step(tokens, token_lengths, h, h_mask)
+        print(out.size())
+        print(out[:,:,-1:].size())
+        logprobs = F.log_softmax(out[:,:,-1:],dim=1).squeeze(-1)
+        print(logprobs.size())
+        next_token = logprobs.argmax(dim=1)
+        print('next',next_token[0],next_token.size())
+        print('logp',logprobs,logprobs.size())
+        print(logprobs.size(),targets[:,i].size(),out_mask.squeeze(1)[:,i])
         #sum_logprobs += logprobs.squeeze(0)
         #print(logprobs.size(),targets.size())
         loss = criterion(logprobs,targets[:,i],out_mask.squeeze(1)[:,i])
         loss_sum +=loss.item()
         next_token[tokens[:, -1] == eos] = eos
-        #print(tokens.size(),next_token.size())
-        tokens = torch.cat([tokens,next_token],dim=-1)
+        print('next eos',next_token[0],next_token.size())
+        print(tokens.size(),next_token.size())
+        tokens = torch.cat([tokens,next_token.unsqueeze(-1)],dim=-1)
         endOfDecode = (tokens[:,-1] == eos).all()
         if endOfDecode:
             break
-
+    """
     return tokens, loss_sum/T
 
-def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train_begin_time, device):
+def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train_begin_time, tokenizer, device):
 
     log_format = "[INFO] step: {:4d}/{:4d}, loss: {:.6f}, " \
                               "cer: {:.2f}, elapsed: {:.2f}s {:.2f}m {:.2f}h, lr: {:.6f}"
@@ -52,18 +79,23 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
 
         if mode == 'train':
             outputs, output_mask = model(inputs, input_lengths, targets, target_lengths, device)
-            logp = torch.nn.functional.log_softmax(outputs,dim=1).transpose(1,2)#.squeeze(-1) # [B, T]
+            logp = torch.nn.functional.log_softmax(outputs,dim=1).transpose(1,2)#.squeeze(-1) # [B, T, D]
             loss = criterion(
                 logp,
                 targets,
                 output_mask
             )
-            y_hats = logp.argmax(dim=2).squeeze(-1)
-
+            #print(logp.size()) # [B , T , D]
+            y_hats = logp.max(2)[1]
+            #print(y_hats,y_hats.size())
 
         elif mode == 'valid':
             outputs, output_lengths = model.module.encoder_forward(inputs, input_lengths)
             y_hats, loss = greedy_scoring(model, criterion, outputs, output_lengths, targets, device)
+            #print(tokenizer.ids_to_text(targets.tolist()))
+            #print(tokenizer.ids_to_text(y_hats.tolist()))
+            #outputs, output_mask = model(inputs, input_lengths, targets, target_lengths, device)
+            #y_hats = outputs.max(1)[1]
             epoch_loss_total += loss
 
         if mode == 'train':
@@ -83,6 +115,7 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
             epoch_elapsed = (current_time - epoch_begin_time) / 60.0
             train_elapsed = (current_time - train_begin_time) / 3600.0
             cer = metric(targets, y_hats)
+            print('label',tokenizer.ids_to_text(targets[0].tolist()),':','predict',tokenizer.ids_to_text(y_hats[0].tolist()))
             print(log_format.format(
                 cnt, len(dataloader), loss,
                 cer, elapsed, epoch_elapsed, train_elapsed,
