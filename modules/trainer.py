@@ -5,8 +5,9 @@ import math
 from dataclasses import dataclass
 import time
 
-#torch.set_printoptions(edgeitems=300)
+from modules.utils import learningRateScheduler
 
+#torch.set_printoptions(edgeitems=300)
 def greedy_scoring(model, criterion, h, h_mask, targets, device, sos=1, eos=2):
 
     #batchSize, _, _ = h.size()
@@ -70,6 +71,9 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
     for inputs, targets, input_lengths, target_lengths in dataloader:
         begin_time = time.time()
 
+        numOfStep = optimizer.optimizer.state[optimizer.param_groups[0]["params"][-1]]["step"]
+        lr = learningRateScheduler(512,numOfStep,4000)
+        optimizer.set_lr(lr)
         optimizer.zero_grad()
         inputs = inputs.to(device)
         targets = targets.to(device)

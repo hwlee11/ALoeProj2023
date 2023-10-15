@@ -169,7 +169,8 @@ if __name__ == '__main__':
     if config.mode == 'train':
 
         lr_scheduler = get_lr_scheduler(config, optimizer, len(train_dataset))
-        optimizer = Optimizer(optimizer, lr_scheduler, int(len(train_dataset)*config.num_epochs), config.max_grad_norm)
+        optimizer = Optimizer(optimizer, None, None, config.max_grad_norm)
+        #optimizer = Optimizer(optimizer, lr_scheduler, int(len(train_dataset)*config.num_epochs), config.max_grad_norm)
         criterion = get_criterion(config)
 
         num_epochs = config.num_epochs

@@ -9,6 +9,13 @@ from torch import optim
 from modules.vocab import Vocabulary
 from modules.losses import NLLLoss
 
+def learningRateScheduler(dDim,stepNum,warmupSteps):
+
+    if stepNum == 0:
+        return math.pow(dDim,-0.5)
+
+    learningRate = math.pow(dDim,-0.5)*min(math.pow(stepNum,-0.5),stepNum*math.pow(warmupSteps,-1.5))
+    return learningRate
 
 class LearningRateScheduler(object):
     """
