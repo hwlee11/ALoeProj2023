@@ -127,7 +127,7 @@ if __name__ == '__main__':
     args.add_argument('--transform_method', type=str, default='fbank')
     args.add_argument('--feature_extract_by', type=str, default='kaldi')
     args.add_argument('--sample_rate', type=int, default=16000)
-    args.add_argument('--frame_length', type=int, default=20)
+    args.add_argument('--frame_length', type=int, default=25)
     args.add_argument('--frame_shift', type=int, default=10)
     args.add_argument('--n_mels', type=int, default=80)
     args.add_argument('--freq_mask_para', type=int, default=18)

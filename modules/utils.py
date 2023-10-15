@@ -186,6 +186,8 @@ def get_optimizer(model: nn.Module, config):
     return supported_optimizer[config.optimizer](
         model.module.parameters(),
         lr=config.init_lr,
+        betas=(0.9,0.98),
+        eps=1e-09,
         weight_decay=config.weight_decay,
     )
 
