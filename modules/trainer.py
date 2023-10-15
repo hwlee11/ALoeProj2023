@@ -71,8 +71,8 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
     for inputs, targets, input_lengths, target_lengths in dataloader:
         begin_time = time.time()
 
-        numOfStep = optimizer.optimizer.state[optimizer.param_groups[0]["params"][-1]]["step"]
-        lr = learningRateScheduler(512,numOfStep,4000)
+        numOfStep = optimizer.count #.optimizer.state#[optimizer.optimizer.param_groups[0]["params"]]#[-1]] #["step"]
+        lr = learningRateScheduler(512,numOfStep,3000)
         optimizer.set_lr(lr)
         optimizer.zero_grad()
         inputs = inputs.to(device)

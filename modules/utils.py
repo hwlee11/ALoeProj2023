@@ -12,7 +12,8 @@ from modules.losses import NLLLoss
 def learningRateScheduler(dDim,stepNum,warmupSteps):
 
     if stepNum == 0:
-        return math.pow(dDim,-0.5)
+        learningRate = math.pow(dDim,-0.5)*min(math.pow(1,-0.5),math.pow(warmupSteps,-1.5))
+        return learningRate #math.pow(dDim,-0.5)
 
     learningRate = math.pow(dDim,-0.5)*min(math.pow(stepNum,-0.5),stepNum*math.pow(warmupSteps,-1.5))
     return learningRate
@@ -126,7 +127,9 @@ class Optimizer(object):
         if self.max_grad_norm > 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), self.max_grad_norm)
         self.optimizer.step()
+        self.count += 1
 
+        """
         if self.scheduler is not None:
             self.update()
             self.count += 1
@@ -135,7 +138,7 @@ class Optimizer(object):
                 self.scheduler = None
                 self.scheduler_period = 0
                 self.count = 0
-
+        """
     def set_scheduler(self, scheduler, scheduler_period):
         self.scheduler = scheduler
         self.scheduler_period = scheduler_period
