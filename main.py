@@ -86,7 +86,7 @@ if __name__ == '__main__':
     # Parameters 
     args.add_argument('--use_cuda', type=bool, default=True)
     args.add_argument('--seed', type=int, default=777)
-    args.add_argument('--num_epochs', type=int, default=200)
+    args.add_argument('--num_epochs', type=int, default=10)
     args.add_argument('--batch_size', type=int, default=128)
     #args.add_argument('--batch_size', type=int, default=128)
     args.add_argument('--save_result_every', type=int, default=10)

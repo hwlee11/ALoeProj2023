@@ -157,7 +157,7 @@ def load_dataset(transcripts_path):
     return audio_paths, transcripts
 
 
-def split_dataset(config, transcripts_path: str, sos_id=1, eos_id=2, valid_size=.2):
+def split_dataset(config, transcripts_path: str, sos_id=1, eos_id=2, valid_size=.05):
     """
     split into training set and validation set.
 
@@ -229,7 +229,7 @@ def collate_fn(batch):
         batch = sorted(batch, key=lambda sample: sample[0].size(0), reverse=True)
 
         seq_lengths = [len(s[0]) for s in batch]
-        target_lengths = [len(s[1]) - 1 for s in batch]
+        target_lengths = [len(s[1]) for s in batch]
 
         max_seq_sample = max(batch, key=seq_length_)[0]
         max_target_sample = max(batch, key=target_length_)[1]
