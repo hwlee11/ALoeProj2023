@@ -19,23 +19,6 @@ def load(path, model):
     #    optimizer.load_state_dict(state['optimizer'])
     print('Model loaded')
 
-def greedy_scoring(model, h, h_mask, targets, device, sos=1, eos=2):
-
-    batchSize, T = targets.size()
-    tokens = torch.tensor([[sos]] * batchSize).to(device)
-    token_lengths = torch.tensor([1]*batchSize).to(device)
-
-    while True:
-        out, out_mask = model.module.decode_one_step(tokens, token_lengths, h, h_mask)
-        next_token = out[:,:,-1:].argmax(dim=1)
-        next_token[tokens[:, -1] == eos] = eos
-        token_lengths[tokens[:,-1] != eos]+=1
-        tokens = torch.cat([tokens,next_token],dim=-1)
-        endOfDecode = (tokens[:,-1] == eos).all()
-        if endOfDecode:
-            break
-
-    return tokens
 
     #def BeamSearchDecode(model, logits, beam_size, sos=1, eos=2):
 
@@ -70,9 +53,7 @@ class BeamSearchDecoder():
         n_audio = tokens.shape[0] // self.beam_size
         if self.finished_sequences is None:  # for the first update
             self.finished_sequences = [{} for _ in range(n_audio)]
-        print(logits.size())
-        logprobs = F.log_softmax(logits.float(), dim=1).transpose(1,2)
-        print(logprobs.size())
+        logprobs = F.log_softmax(logits.float(), dim=1)[:,:,-1:].squeeze(-1)#.transpose(1,2)
         next_tokens, finished_sequences = [], []
         for i in range(n_audio):
             scores, sources, finished = {}, {}, {}
@@ -81,8 +62,7 @@ class BeamSearchDecoder():
             for j in range(self.beam_size):
                 idx = i * self.beam_size + j
                 prefix = tokens[idx].tolist()
-                for logprob, token in zip(*logprobs[idx].topk(self.beam_size)) + 1)):
-                    print(logprob.size())
+                for logprob, token in zip(*logprobs[idx].topk(self.beam_size + 1)):
                     new_logprob = (sum_logprobs[idx] + logprob).item()
                     sequence = tuple(prefix + [token.item()])
                     scores[sequence] = new_logprob
@@ -150,24 +130,44 @@ def beamSearch(model, beamSize, h, h_mask, device, sos=1, eos=2):
 
     batchSize, _, T = h.size()
     #tokens = torch.tensor([sos]).repeat(batchSize, 1)
-    tokens = torch.tensor([[sos]] * batchSize).to(device)
-    token_lengths = torch.tensor([1] * batchSize).to(device)
+    tokens = torch.tensor([[sos]] * (batchSize * beamSize)).to(device)
+    token_lengths = torch.tensor([1] * (batchSize * beamSize)).to(device)
     beam = BeamSearchDecoder(beamSize, eos)
 
-    sum_logprobs = torch.zeros(batchSize).to(device)
+    sum_logprobs = torch.zeros(batchSize*beamSize).to(device)
     #hyps = {'tokens':[],'socre':[]}
-    #h = h.squeeze(0).repeat(beamSize,1,1)
-    #h_mask = h_mask.squeeze(0).repeat(beamSize,1,1)
+    h = h.squeeze(0).repeat(beamSize,1,1)
+    h_mask = h_mask.squeeze(0).repeat(beamSize,1,1)
 
     while True:
         #print(h.size(),h_mask.size())
         #exit()
         #print(logits.size())
+        #tokens = tokens.repeat_interleave(beamSize, dim=0).to(device)
+        #print(tokens.size())
         logits, out_mask = model.module.decode_one_step(tokens, token_lengths, h, h_mask)
-        tokens = tokens.repeat_interleave(beamSize, dim=0).to(device)
         tokens, completed = beam.update(tokens, logits, sum_logprobs)
         logprobs = F.log_softmax(logits.float(), dim=1)
         if completed:
+            break
+
+    return tokens
+
+def greedy_scoring(model, h, h_mask, device, sos=1, eos=2):
+
+    #batchSize, T = targets.size()
+    batchSize, _, _ = h.size()
+    tokens = torch.tensor([[sos]] * batchSize).to(device)
+    token_lengths = torch.tensor([1]*batchSize).to(device)
+
+    while True:
+        out, out_mask = model.module.decode_one_step(tokens, token_lengths, h, h_mask)
+        next_token = out[:,:,-1:].argmax(dim=1)
+        next_token[tokens[:, -1] == eos] = eos
+        token_lengths[tokens[:,-1] != eos]+=1
+        tokens = torch.cat([tokens,next_token],dim=-1)
+        endOfDecode = (tokens[:,-1] == eos).all()
+        if endOfDecode:
             break
 
     return tokens
@@ -187,9 +187,11 @@ def parse_audio(audio_path: str, del_silence: bool = False, audio_extension: str
     return torch.FloatTensor(feature).transpose(0, 1)
 
 
-def single_infer(model, audio_path):
+#def single_infer(model, audio_path, beamSize, tokeniezr):
+def single_infer(model, features, beamSize, tokenizer):
     device = 'cuda'
-    feature = parse_audio(audio_path, del_silence=True).to(device)
+    #feature = parse_audio(audio_path, del_silence=True).to(device)
+    feature = features[0].to(device)
     input_length = torch.LongTensor([len(feature)]).to(device)
     #vocab = KoreanSpeechVocabulary(os.path.join(os.getcwd(), 'labels.csv'), output_unit='character')
 
@@ -199,15 +201,18 @@ def single_infer(model, audio_path):
 
     #model.device = device
     outputs, output_lengths = model.module.encoder_forward(feature.unsqueeze(0), input_length)
-    sentence = beamSearch(model, 4, outputs, output_lengths, device)
-    #y_hats, loss = greedy_scoring(model, outputs, output_lengths, targets, device)
+    #sentence = beamSearch(model, beamSize, outputs, output_lengths, device)
+    sentence = greedy_scoring(model, outputs, output_lengths, device)
+    text = tokenizer.ids_to_text(sentence[0].tolist())
+    
 
     #sentence = vocab.label_to_string(y_hats.cpu().detach().numpy())
 
-    return sentence
+    return text
 
-def infer_test(model):
-    audio_path = '/share/datas/Validation/audio/노인남여_노인대화77_F_문XX_60_제주_실내/노인남여_노인대화77_F_문XX_60_제주_실내_84090.WAV'
+def infer_test(model,tokenizer):
+    audio_path = '/share/datas/Validation/audio/노인남여_노인대화77_F_문XX_60_제주_실내/노인남여_노인대화77_F_문XX_60_제주_실내_84091.WAV'
     s = single_infer(model,audio_path)
-    print(s)
+    text = tokenizer.ids_to_text(s[0].tolist())
+    print(text)
 
