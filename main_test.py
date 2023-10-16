@@ -26,7 +26,7 @@ from modules.vocab import KoreanSpeechVocabulary
 from modules.data import split_dataset, collate_fn
 from modules.utils import Optimizer
 from modules.metrics import get_metric
-from modules.inference import single_infer
+from modules.AEDInference import single_infer, infer_test
 
 
 from torch.utils.data import DataLoader
@@ -174,12 +174,16 @@ if __name__ == '__main__':
     optimizer = get_optimizer(model, config)
     metric = get_metric(metric_name='CER', vocab=tokenizer)
     #bind_model(model, optimizer=optimizer)
-    #load('./temp',model)
+    load('./temp',model)
 
     #if config.pause:
     #    nova.paused(scope=locals())
     train_dataset, valid_dataset = split_dataset(config, os.path.join(os.getcwd(), 'transcripts.txt'))
 
+    # decoding test
+    infer_test(model)
+    exit()
+    
     if config.mode == 'train':
 
         #config.dataset_path = os.path.join(DATASET_PATH, 'train', 'train_data')
@@ -189,6 +193,7 @@ if __name__ == '__main__':
         #lr_scheduler = get_lr_scheduler(config, optimizer, len(train_dataset))
         #optimizer = Optimizer(optimizer, lr_scheduler, int(len(train_dataset)*config.num_epochs), config.max_grad_norm)
         optimizer = Optimizer(optimizer, None, None, config.max_grad_norm)
+        optimizer.count = 100*25
         criterion = get_criterion(config)
 
         num_epochs = config.num_epochs
@@ -264,3 +269,4 @@ if __name__ == '__main__':
             torch.cuda.empty_cache()
             print(f'[INFO] epoch {epoch} is done')
         print('[INFO] train process is done')
+    
