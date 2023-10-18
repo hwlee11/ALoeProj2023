@@ -15,7 +15,7 @@ def learningRateScheduler(dDim,stepNum,warmupSteps):
         learningRate = math.pow(dDim,-0.5)*min(math.pow(1,-0.5),math.pow(warmupSteps,-1.5))
         return learningRate #math.pow(dDim,-0.5)
 
-    learningRate = math.pow(dDim,-0.5)*min(math.pow(stepNum,-0.5),stepNum*math.pow(warmupSteps,-1.5))
+    learningRate = math.pow(dDim,-0.5)*min(math.pow(stepNum,-0.55),stepNum*math.pow(warmupSteps,-1.5))
     return learningRate
 
 class LearningRateScheduler(object):
@@ -180,7 +180,7 @@ def get_lr_scheduler(config, optimizer, epoch_time_step) -> LearningRateSchedule
 
 def get_optimizer(model: nn.Module, config):
     supported_optimizer = {
-        'adam': optim.Adam,
+        'adam': optim.AdamW,
     }
 
     return supported_optimizer[config.optimizer](

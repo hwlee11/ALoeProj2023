@@ -9,6 +9,7 @@ import argparse
 from glob import glob
 
 from modules.preprocess import preprocessing_spe
+from modules.preprocess import preprocessing
 from modules.trainer import trainer
 from modules.utils import (
     get_optimizer,
@@ -26,7 +27,7 @@ from modules.vocab import KoreanSpeechVocabulary
 from modules.data import split_dataset, collate_fn
 from modules.utils import Optimizer
 from modules.metrics import get_metric
-from modules.inference import single_infer
+from modules.AEDInference import single_infer
 
 
 from torch.utils.data import DataLoader
@@ -87,7 +88,7 @@ if __name__ == '__main__':
     args.add_argument('--use_cuda', type=bool, default=True)
     args.add_argument('--seed', type=int, default=777)
     args.add_argument('--num_epochs', type=int, default=10)
-    args.add_argument('--batch_size', type=int, default=128)
+    args.add_argument('--batch_size', type=int, default=256)
     #args.add_argument('--batch_size', type=int, default=128)
     args.add_argument('--save_result_every', type=int, default=10)
     args.add_argument('--checkpoint_every', type=int, default=1)
@@ -103,7 +104,7 @@ if __name__ == '__main__':
     args.add_argument('--final_lr_scale', type=float, default=5e-02)
     args.add_argument('--max_grad_norm', type=int, default=400)
     args.add_argument('--warmup_steps', type=int, default=1000)
-    args.add_argument('--weight_decay', type=float, default=1e-05)
+    args.add_argument('--weight_decay', type=float, default=1e-01)
     args.add_argument('--reduction', type=str, default='mean')
     args.add_argument('--optimizer', type=str, default='adam')
     args.add_argument('--lr_scheduler', type=str, default='tri_stage_lr_scheduler')
@@ -148,17 +149,12 @@ if __name__ == '__main__':
     if hasattr(config, "num_threads") and int(config.num_threads) > 0:
         torch.set_num_threads(config.num_threads)
 
-    #vocab = KoreanSpeechVocabulary(os.path.join(os.getcwd(), 'labels.csv'), output_unit='character')
-    # prepare data
-    config.dataset_path = os.path.join(DATASET_PATH, 'train', 'train_data')
-    label_path = os.path.join(DATASET_PATH, 'train', 'train_label')
-    # data preprocessing and build tokenizer
-    tokenizer = preprocessing_spe(label_path, os.getcwd())
-    vocab_size = len(tokenizer.vocab)
-
-    train_dataset, valid_dataset = split_dataset(config, os.path.join(os.getcwd(), 'transcripts.txt'))
+    tokenizer = KoreanSpeechVocabulary(os.path.join(os.getcwd(), 'labels.csv'), output_unit='character')
+    #tokenizer = preprocessing_spe(label_path, os.getcwd())
     # build AED model
+    vocab_size = 2000 # 
     model = build_model(config, vocab_size, device)
+    #model = build_model(config, vocab_size, device)
     optimizer = get_optimizer(model, config)
     bind_model(model, optimizer=optimizer)
     metric = get_metric(metric_name='CER', vocab=tokenizer)
@@ -167,6 +163,16 @@ if __name__ == '__main__':
         nova.paused(scope=locals())
 
     if config.mode == 'train':
+
+        # prepare data
+        config.dataset_path = os.path.join(DATASET_PATH, 'train', 'train_data')
+        label_path = os.path.join(DATASET_PATH, 'train', 'train_label')
+        preprocessing(label_path, os.getcwd())
+        # data preprocessing and build tokenizer
+        #vocab_size = len(tokenizer.vocab)
+    
+        train_dataset, valid_dataset = split_dataset(config, os.path.join(os.getcwd(), 'transcripts.txt'))
+
 
         lr_scheduler = get_lr_scheduler(config, optimizer, len(train_dataset))
         optimizer = Optimizer(optimizer, None, None, config.max_grad_norm)
@@ -193,12 +199,18 @@ if __name__ == '__main__':
                 num_workers=config.num_workers
         )
 
+        init_lr = 1e-3
+        #optimizer.set_lr(init_lr)
+        lr = init_lr
+
         for epoch in range(num_epochs):
             print('[INFO] Epoch %d start' % epoch)
 
             # train
+            
 
             model, train_loss, train_cer = trainer(
+                epoch,
                 'train',
                 config,
                 train_loader,
@@ -212,11 +224,15 @@ if __name__ == '__main__':
             )
 
             print('[INFO] Epoch %d (Training) Loss %0.4f CER %0.4f' % (epoch, train_loss, train_cer))
-
+            
+            if epoch == 9 or epoch == 19:
+                lr /=10
+                optimizer.set_lr(lr)
+            
             # valid
 
-
             model, valid_loss, valid_cer = trainer(
+                epoch,
                 'valid',
                 config,
                 valid_loader,

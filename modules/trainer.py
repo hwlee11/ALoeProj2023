@@ -17,15 +17,15 @@ def greedy_scoring(model, criterion, h, h_mask, targets, device, sos=1, eos=2):
     #out_logprobs = torch.zeros(batchSize,2000).to(device)
     loss_sum = 0
     #print('targets',targets)
-    for i in range(T+10):
+    for i in range(T):
         out, out_mask = model.module.decode_one_step(tokens, token_lengths, h, h_mask)
         #print('out mask',out_mask.size())
         next_token = out[:,:,-1:].argmax(dim=1)
         logprobs = F.log_softmax(out[:,:,-1:],dim=1).squeeze(-1)
         #print(logprobs[:,2])
         #sum_logprobs += logprobs.squeeze(0)
-        #loss = criterion(logprobs,targets[:,i],out_mask.squeeze(1)[:,i])
-        #loss_sum +=loss.item()
+        loss = criterion(logprobs,targets[:,i],out_mask.squeeze(1)[:,i])
+        loss_sum +=loss.item()
         next_token[tokens[:, -1] == eos] = eos
         #print(tokens[:,-1] != eos)
         token_lengths[tokens[:,-1] != eos]+=1
@@ -59,7 +59,7 @@ def greedy_scoring(model, criterion, h, h_mask, targets, device, sos=1, eos=2):
     """
     return tokens, loss_sum/T
 
-def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train_begin_time, tokenizer, device):
+def trainer(epoch, mode, config, dataloader, optimizer, model, criterion, metric, train_begin_time, tokenizer, device):
 
     log_format = "[INFO] step: {:4d}/{:4d}, loss: {:.6f}, " \
                               "cer: {:.2f}, elapsed: {:.2f}s {:.2f}m {:.2f}h, lr: {:.6f}"
@@ -70,10 +70,11 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
     cnt = 0
     for inputs, targets, input_lengths, target_lengths in dataloader:
         begin_time = time.time()
-
-        numOfStep = optimizer.count #.optimizer.state#[optimizer.optimizer.param_groups[0]["params"]]#[-1]] #["step"]
-        lr = learningRateScheduler(512,numOfStep,3000)
-        optimizer.set_lr(lr)
+        
+        if epoch < 10:
+            numOfStep = optimizer.count #.optimizer.state#[optimizer.optimizer.param_groups[0]["params"]]#[-1]] #["step"]
+            lr = learningRateScheduler(256,numOfStep,3700)
+            optimizer.set_lr(lr)
         optimizer.zero_grad()
         inputs = inputs.to(device)
         targets = targets.to(device)
@@ -119,7 +120,8 @@ def trainer(mode, config, dataloader, optimizer, model, criterion, metric, train
             epoch_elapsed = (current_time - epoch_begin_time) / 60.0
             train_elapsed = (current_time - train_begin_time) / 3600.0
             cer = metric(targets, y_hats)
-            print('label',tokenizer.ids_to_text(targets[0].tolist()),':','predict',tokenizer.ids_to_text(y_hats[0].tolist()))
+            print('label',tokenizer.label_to_string(targets[0]),':','predict',tokenizer.label_to_string(y_hats[0]))
+            #print('label',tokenizer.ids_to_text(targets[0].tolist()),':','predict',tokenizer.ids_to_text(y_hats[0].tolist()))
             print(log_format.format(
                 cnt, len(dataloader), loss,
                 cer, elapsed, epoch_elapsed, train_elapsed,

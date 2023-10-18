@@ -11,6 +11,7 @@ from modules.vocab import KoreanSpeechVocabulary
 from modules.data import load_audio
 from modules.model import DeepSpeech2
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from nova import DATASET_PATH
 
 def load(path, model):
     state = torch.load(os.path.join(path, 'model_99.pt'))
@@ -188,10 +189,14 @@ def parse_audio(audio_path: str, del_silence: bool = False, audio_extension: str
 
 
 #def single_infer(model, audio_path, beamSize, tokeniezr):
-def single_infer(model, features, beamSize, tokenizer):
+#def single_infer(model, features, beamSize, tokenizer):
+def single_infer(model,audio_path):
     device = 'cuda'
-    #feature = parse_audio(audio_path, del_silence=True).to(device)
-    feature = features[0].to(device)
+    label_path = os.path.join(DATASET_PATH, 'train', 'train_label')
+    # data preprocessing and build tokenizer
+    tokenizer = preprocessing_spe(label_path, os.getcwd())
+    feature = parse_audio(audio_path, del_silence=True).to(device)
+    #feature = features[0].to(device)
     input_length = torch.LongTensor([len(feature)]).to(device)
     #vocab = KoreanSpeechVocabulary(os.path.join(os.getcwd(), 'labels.csv'), output_unit='character')
 
@@ -204,9 +209,6 @@ def single_infer(model, features, beamSize, tokenizer):
     #sentence = beamSearch(model, beamSize, outputs, output_lengths, device)
     sentence = greedy_scoring(model, outputs, output_lengths, device)
     text = tokenizer.ids_to_text(sentence[0].tolist())
-    
-
-    #sentence = vocab.label_to_string(y_hats.cpu().detach().numpy())
 
     return text
 
