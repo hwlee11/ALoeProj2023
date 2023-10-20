@@ -24,10 +24,10 @@ from modules.audio import (
 )
 from modules.model import build_model
 from modules.vocab import KoreanSpeechVocabulary
-from modules.data import split_dataset, collate_fn
+from modules.data import split_dataset, collate_fn, testDataset, collate_test_fn
 from modules.utils import Optimizer
 from modules.metrics import get_metric
-from modules.AEDInference import single_infer
+from modules.AEDInference import single_infer, test_infer
 
 
 from torch.utils.data import DataLoader
@@ -36,7 +36,7 @@ import nova
 from nova import DATASET_PATH
 
 
-def bind_model(model, optimizer=None):
+def bind_model(model, config, tokenizer, optimizer=None):
     def save(path, *args, **kwargs):
         state = {
             'model': model.state_dict(),
@@ -54,22 +54,26 @@ def bind_model(model, optimizer=None):
 
     # 추론
     def infer(path, **kwargs):
-        return inference(path, model)
+        return inference(path, model, config, tokenizer)
 
     nova.bind(save=save, load=load, infer=infer)  # 'nova.bind' function must be called at the end.
 
 
-def inference(path, model, **kwargs):
+def inference(path, model, config, tokenizer, **kwargs):
     model.eval()
 
     results = []
-    for i in glob(os.path.join(path, '*')):
-        results.append(
-            {
-                'filename': i.split('/')[-1],
-                'text': single_infer(model, i)[0]
-            }
-        )
+    test_datas = glob(os.path.join(path, '*'))
+    test_set = testDataset(test_datas, config)
+    test_loader = DataLoader(
+                test_set,
+                batch_size=64,
+                shuffle=True,
+                collate_fn=collate_test_fn,
+                num_workers=8
+    )
+    results = test_infer(model, test_loader, tokenizer)
+
     return sorted(results, key=lambda x: x['filename'])
 
 
@@ -87,12 +91,12 @@ if __name__ == '__main__':
     # Parameters 
     args.add_argument('--use_cuda', type=bool, default=True)
     args.add_argument('--seed', type=int, default=777)
-    args.add_argument('--num_epochs', type=int, default=10)
-    args.add_argument('--batch_size', type=int, default=256)
+    args.add_argument('--num_epochs', type=int, default=30)
+    args.add_argument('--batch_size', type=int, default=196)
     #args.add_argument('--batch_size', type=int, default=128)
     args.add_argument('--save_result_every', type=int, default=10)
     args.add_argument('--checkpoint_every', type=int, default=1)
-    args.add_argument('--print_every', type=int, default=50)
+    args.add_argument('--print_every', type=int, default=100)
     args.add_argument('--dataset', type=str, default='kspon')
     args.add_argument('--output_unit', type=str, default='character')
     args.add_argument('--num_workers', type=int, default=16)
@@ -131,8 +135,8 @@ if __name__ == '__main__':
     args.add_argument('--frame_length', type=int, default=25)
     args.add_argument('--frame_shift', type=int, default=10)
     args.add_argument('--n_mels', type=int, default=80)
-    args.add_argument('--freq_mask_para', type=int, default=18)
-    args.add_argument('--time_mask_num', type=int, default=4)
+    args.add_argument('--freq_mask_para', type=int, default=27)
+    args.add_argument('--time_mask_num', type=int, default=10)
     args.add_argument('--freq_mask_num', type=int, default=2)
     args.add_argument('--normalize', type=bool, default=True)
     args.add_argument('--del_silence', type=bool, default=True)
@@ -152,11 +156,13 @@ if __name__ == '__main__':
     tokenizer = KoreanSpeechVocabulary(os.path.join(os.getcwd(), 'labels.csv'), output_unit='character')
     #tokenizer = preprocessing_spe(label_path, os.getcwd())
     # build AED model
-    vocab_size = 2000 # 
+    vocab_size = len(tokenizer) # 
     model = build_model(config, vocab_size, device)
+    print(model)
+    print(vocab_size, tokenizer.blank_id)
     #model = build_model(config, vocab_size, device)
     optimizer = get_optimizer(model, config)
-    bind_model(model, optimizer=optimizer)
+    bind_model(model, config, tokenizer,optimizer=optimizer)
     metric = get_metric(metric_name='CER', vocab=tokenizer)
 
     if config.pause:
@@ -177,7 +183,7 @@ if __name__ == '__main__':
         lr_scheduler = get_lr_scheduler(config, optimizer, len(train_dataset))
         optimizer = Optimizer(optimizer, None, None, config.max_grad_norm)
         #optimizer = Optimizer(optimizer, lr_scheduler, int(len(train_dataset)*config.num_epochs), config.max_grad_norm)
-        criterion = get_criterion(config)
+        ctc, nll = get_criterion(config, tokenizer)
 
         num_epochs = config.num_epochs
         num_workers = config.num_workers
@@ -199,9 +205,9 @@ if __name__ == '__main__':
                 num_workers=config.num_workers
         )
 
-        init_lr = 1e-3
+        #init_lr = 1e-3
         #optimizer.set_lr(init_lr)
-        lr = init_lr
+        #lr = init_lr
 
         for epoch in range(num_epochs):
             print('[INFO] Epoch %d start' % epoch)
@@ -209,6 +215,7 @@ if __name__ == '__main__':
             # train
             
 
+            model.train()
             model, train_loss, train_cer = trainer(
                 epoch,
                 'train',
@@ -216,7 +223,8 @@ if __name__ == '__main__':
                 train_loader,
                 optimizer,
                 model,
-                criterion,
+                ctc,
+                nll,
                 metric,
                 train_begin_time,
                 tokenizer,
@@ -225,12 +233,12 @@ if __name__ == '__main__':
 
             print('[INFO] Epoch %d (Training) Loss %0.4f CER %0.4f' % (epoch, train_loss, train_cer))
             
-            if epoch == 9 or epoch == 19:
-                lr /=10
-                optimizer.set_lr(lr)
+            #if epoch == 9 or epoch == 19:
+            #    lr /=10
+            #    optimizer.set_lr(lr)
             
             # valid
-
+            model.eval()
             model, valid_loss, valid_cer = trainer(
                 epoch,
                 'valid',
@@ -238,7 +246,8 @@ if __name__ == '__main__':
                 valid_loader,
                 optimizer,
                 model,
-                criterion,
+                ctc,
+                nll,
                 metric,
                 train_begin_time,
                 tokenizer,

@@ -305,8 +305,8 @@ class DiscriminatorP(torch.nn.Module):
         self.convs = nn.ModuleList([
             norm_f(Conv2d(1, 32, (kernel_size, 1), (stride, 1), padding=(get_padding(kernel_size, 1), 0))),
             norm_f(Conv2d(32, 128, (kernel_size, 1), (stride, 1), padding=(get_padding(kernel_size, 1), 0))),
-            norm_f(Conv2d(128, 512, (kernel_size, 1), (stride, 1), padding=(get_padding(kernel_size, 1), 0))),
-            norm_f(Conv2d(512, 1024, (kernel_size, 1), (stride, 1), padding=(get_padding(kernel_size, 1), 0))),
+            norm_f(Conv2d(128, 384, (kernel_size, 1), (stride, 1), padding=(get_padding(kernel_size, 1), 0))),
+            norm_f(Conv2d(384, 1024, (kernel_size, 1), (stride, 1), padding=(get_padding(kernel_size, 1), 0))),
             norm_f(Conv2d(1024, 1024, (kernel_size, 1), 1, padding=(get_padding(kernel_size, 1), 0))),
         ])
         self.conv_post = norm_f(Conv2d(1024, 1, (3, 1), 1, padding=(1, 0)))
@@ -389,6 +389,7 @@ class MultiPeriodDiscriminator(torch.nn.Module):
 class AudioEncoder(torch.nn.Module):
   def __init__(self,
       #out_channels,
+      n_vocab,
       hidden_channels,
       filter_channels,
       n_heads,
@@ -396,7 +397,7 @@ class AudioEncoder(torch.nn.Module):
       kernel_size,
       p_dropout):
     super().__init__()
-    #self.n_vocab = n_vocab
+    self.n_vocab = n_vocab
     #self.out_channels = out_channels
     self.hidden_channels = hidden_channels
     self.filter_channels = filter_channels
@@ -415,7 +416,7 @@ class AudioEncoder(torch.nn.Module):
       n_layers,
       kernel_size,
       p_dropout)
-    #self.proj= nn.Conv1d(hidden_channels, out_channels * 2, 1)
+    self.proj= nn.Conv1d(hidden_channels, n_vocab, 1)
 
   def forward(self, x, x_lengths):
     x = x * math.sqrt(self.hidden_channels) # [b, t, h]
@@ -423,9 +424,9 @@ class AudioEncoder(torch.nn.Module):
     x_mask = torch.unsqueeze(commons.sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
 
     x = self.encoder(x * x_mask, x_mask)
-    #stats = self.proj(x) * x_mask
+    ctc_out = self.proj(x)
     #m, logs = torch.split(stats, self.out_channels, dim=1)
-    return x, x_mask
+    return x, x_mask, ctc_out
 
 class AudioDecoder(torch.nn.Module):
   def __init__(self,
@@ -507,11 +508,12 @@ class AttentionEncoderDecoder(torch.nn.Module):
             feat_out=d_model,
             conv_channels=subsampling_conv_channels,
             subsampling_conv_chunking_factor=subsampling_conv_chunking_factor,
-            activation=nn.ReLU(True),
+            activation=nn.GELU(),
             is_causal=causal_downsampling,
         )
 
         self.encoder = AudioEncoder(
+            n_vocab,
             hidden_channels,
             filter_channels,
             n_heads,
@@ -532,7 +534,7 @@ class AttentionEncoderDecoder(torch.nn.Module):
         # y [B, T]
 
         x, x_lengths = self.pre_encode(x,x_lengths)
-        h, h_mask = self.encoder(x, x_lengths)
+        h, h_mask, ctc_out = self.encoder(x, x_lengths)
 
         # cat sos tokens
         sosTensor = torch.ones([h.size()[0],1],dtype=torch.int64).to(y.device)
@@ -540,13 +542,13 @@ class AttentionEncoderDecoder(torch.nn.Module):
 
         # text decoder
         out, out_mask = self.decoder(y[:,:-1], y_lengths , h, h_mask)
-        return out, out_mask
+        return out, out_mask, ctc_out, x_lengths
 
     @torch.no_grad()
     def encoder_forward(self, x, x_lengths):
 
         x, x_lengths = self.pre_encode(x,x_lengths)
-        h, h_mask = self.encoder(x, x_lengths)
+        h, h_mask, ctc_out = self.encoder(x, x_lengths)
         return h, h_mask
 
     @torch.no_grad()

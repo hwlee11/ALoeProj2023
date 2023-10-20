@@ -192,9 +192,9 @@ def get_optimizer(model: nn.Module, config):
     )
 
 
-def get_criterion(config) -> nn.Module:
+def get_criterion(config, vocab) -> nn.Module:
 
-    #criterion = nn.CTCLoss(blank=vocab.blank_id, reduction=config.reduction, zero_infinity=True)
-    criterion = NLLLoss()
+    ctc = nn.CTCLoss(blank=vocab.blank_id, reduction=config.reduction, zero_infinity=True)
+    nll = NLLLoss()
 
-    return criterion
+    return ctc, nll

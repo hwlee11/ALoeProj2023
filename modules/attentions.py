@@ -29,7 +29,7 @@ class Encoder(nn.Module):
     for i in range(self.n_layers):
       self.attn_layers.append(MultiHeadAttention(hidden_channels, hidden_channels, n_heads, p_dropout=p_dropout, window_size=window_size))
       self.norm_layers_1.append(LayerNorm(hidden_channels))
-      self.ffn_layers.append(FFN(hidden_channels, hidden_channels, filter_channels, kernel_size, p_dropout=p_dropout))
+      self.ffn_layers.append(FFN(hidden_channels, hidden_channels, filter_channels, kernel_size, p_dropout=p_dropout, activation='gelu'))
       self.norm_layers_2.append(LayerNorm(hidden_channels))
 
   def forward(self, x, x_mask):
@@ -71,7 +71,7 @@ class Decoder(nn.Module):
       self.norm_layers_0.append(LayerNorm(hidden_channels))
       self.encdec_attn_layers.append(MultiHeadAttention(hidden_channels, hidden_channels, n_heads, p_dropout=p_dropout))
       self.norm_layers_1.append(LayerNorm(hidden_channels))
-      self.ffn_layers.append(FFN(hidden_channels, hidden_channels, filter_channels, kernel_size, p_dropout=p_dropout, causal=True))
+      self.ffn_layers.append(FFN(hidden_channels, hidden_channels, filter_channels, kernel_size, p_dropout=p_dropout, activation='gelu', causal=True))
       self.norm_layers_2.append(LayerNorm(hidden_channels))
 
   def forward(self, x, x_mask, h, h_mask):

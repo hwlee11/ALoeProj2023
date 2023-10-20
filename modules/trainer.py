@@ -57,9 +57,9 @@ def greedy_scoring(model, criterion, h, h_mask, targets, device, sos=1, eos=2):
         if endOfDecode:
             break
     """
-    return tokens, loss_sum/T
+    return tokens[:,1:], loss_sum/T
 
-def trainer(epoch, mode, config, dataloader, optimizer, model, criterion, metric, train_begin_time, tokenizer, device):
+def trainer(epoch, mode, config, dataloader, optimizer, model, ctc, nll, metric, train_begin_time, tokenizer, device):
 
     log_format = "[INFO] step: {:4d}/{:4d}, loss: {:.6f}, " \
                               "cer: {:.2f}, elapsed: {:.2f}s {:.2f}m {:.2f}h, lr: {:.6f}"
@@ -71,10 +71,10 @@ def trainer(epoch, mode, config, dataloader, optimizer, model, criterion, metric
     for inputs, targets, input_lengths, target_lengths in dataloader:
         begin_time = time.time()
         
-        if epoch < 10:
-            numOfStep = optimizer.count #.optimizer.state#[optimizer.optimizer.param_groups[0]["params"]]#[-1]] #["step"]
-            lr = learningRateScheduler(256,numOfStep,3700)
-            optimizer.set_lr(lr)
+        #if epoch < 10:
+        numOfStep = optimizer.count #.optimizer.state#[optimizer.optimizer.param_groups[0]["params"]]#[-1]] #["step"]
+        lr = learningRateScheduler(256,numOfStep,3700)
+        optimizer.set_lr(lr)
         optimizer.zero_grad()
         inputs = inputs.to(device)
         targets = targets.to(device)
@@ -83,20 +83,28 @@ def trainer(epoch, mode, config, dataloader, optimizer, model, criterion, metric
         model = model.to(device)
 
         if mode == 'train':
-            outputs, output_mask = model(inputs, input_lengths, targets, target_lengths, device)
+            outputs, output_mask, ctc_outputs, output_lengths = model(inputs, input_lengths, targets, target_lengths, device)
             logp = torch.nn.functional.log_softmax(outputs,dim=1).transpose(1,2)#.squeeze(-1) # [B, T, D]
-            loss = criterion(
+
+            nllloss = nll(
                 logp,
                 targets,
                 output_mask
             )
+            ctcloss = ctc(
+                ctc_outputs.transpose(1,2).transpose(0,1),
+                targets,
+                tuple(output_lengths),
+                tuple(target_lengths)
+            )
+            loss = (0.2 * ctcloss) + (0.8 * nllloss)
             #print(logp.size()) # [B , T , D]
             y_hats = logp.max(2)[1]
             #print(y_hats,y_hats.size())
 
         elif mode == 'valid':
-            outputs, output_lengths = model.module.encoder_forward(inputs, input_lengths)
-            y_hats, loss = greedy_scoring(model, criterion, outputs, output_lengths, targets, device)
+            outputs, output_mask = model.module.encoder_forward(inputs, input_lengths)
+            y_hats, loss = greedy_scoring(model, nll, outputs, output_mask, targets, device)
             #print(tokenizer.ids_to_text(targets.tolist()))
             #print(tokenizer.ids_to_text(y_hats.tolist()))
             #outputs, output_mask = model(inputs, input_lengths, targets, target_lengths, device)
@@ -119,8 +127,12 @@ def trainer(epoch, mode, config, dataloader, optimizer, model, criterion, metric
             elapsed = current_time - begin_time
             epoch_elapsed = (current_time - epoch_begin_time) / 60.0
             train_elapsed = (current_time - train_begin_time) / 3600.0
-            cer = metric(targets, y_hats)
-            print('label',tokenizer.label_to_string(targets[0]),':','predict',tokenizer.label_to_string(y_hats[0]))
+            sum_cer = 0
+            for i in range(len(y_hats)):
+                cer = metric(targets[i][:target_lengths[i].item()].unsqueeze(0), y_hats[i][:target_lengths[i].item()].unsqueeze(0))
+                sum_cer+=cer
+            cer = sum_cer/len(y_hats)
+            print('label',tokenizer.label_to_string(targets[0]),':','predict',tokenizer.label_to_string(y_hats[0][:target_lengths[0].item()]))
             #print('label',tokenizer.ids_to_text(targets[0].tolist()),':','predict',tokenizer.ids_to_text(y_hats[0].tolist()))
             print(log_format.format(
                 cnt, len(dataloader), loss,
