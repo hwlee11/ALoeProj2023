@@ -7,6 +7,8 @@ import torchaudio
 import random
 import math
 import pydub
+import operator
+import time
 
 from torch import Tensor
 from torch.utils.data import Dataset
@@ -50,6 +52,20 @@ class testDataset(Dataset, SpectrogramParser):
         )
         self.audio_paths = list(audio_paths)
         self.dataset_size = len(self.audio_paths)
+        s = time.time()
+		self.sortedPath()
+        t = time.time()
+        print(t-s,len(self.audio_paths))
+        exit()
+
+
+    def sortedPath(self,):
+        module = dict()
+        for path in self.audio_paths:
+            signal = load_audio(audio_path, del_silence, extension=audio_extension)
+            module[path] = len(signal)
+		h = sorted(module.items(),key=operator.itemgetter(1),reverse=True)
+		self.audio_paths = [path for path, _ in h]
 
     def __getitem__(self, idx):
         """ get feature vector & transcript """
@@ -212,7 +228,7 @@ def load_dataset(transcripts_path):
     return audio_paths, transcripts
 
 
-def split_dataset(config, transcripts_path: str, sos_id=1, eos_id=2, valid_size=.05):
+def split_dataset(config, transcripts_path: str, sos_id=1, eos_id=2, valid_size=.10):
     """
     split into training set and validation set.
 
