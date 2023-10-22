@@ -7,8 +7,9 @@ import torchaudio
 import random
 import math
 import pydub
-import operator
+#import operator
 import time
+import multiprocessing
 
 from torch import Tensor
 from torch.utils.data import Dataset
@@ -50,26 +51,34 @@ class testDataset(Dataset, SpectrogramParser):
             transform_method=config.transform_method,
             audio_extension=audio_extension
         )
+        self.config = config
         self.audio_paths = list(audio_paths)
         self.dataset_size = len(self.audio_paths)
-        s = time.time()
-		self.sortedPath()
-        t = time.time()
-        print(t-s,len(self.audio_paths))
-        exit()
+        #s = time.time()
+        #self.sortedPath()
+        #t = time.time()
+        #print(t-s,len(self.datas))
+        #exit()
 
+    def load_features(self, path):
+        feature = self.parse_audio(path, 0)
+        feature_len = len(feature)
+        return feature, path, feature_len
 
     def sortedPath(self,):
-        module = dict()
-        for path in self.audio_paths:
-            signal = load_audio(audio_path, del_silence, extension=audio_extension)
-            module[path] = len(signal)
-		h = sorted(module.items(),key=operator.itemgetter(1),reverse=True)
-		self.audio_paths = [path for path, _ in h]
+
+        with multiprocessing.Pool(16) as pool:
+            datas = pool.map(self.load_features,self.audio_paths)
+
+        #h = sorted(datas.items(),key=operator.itemgetter(2),reverse=True)
+        datas.sort(key=lambda a: a[3], reverse=True)
+        #self.audio_paths = [path for path, _ in h]
+        self.datas = datas
 
     def __getitem__(self, idx):
         """ get feature vector & transcript """
-        feature = self.parse_audio(self.audio_paths[idx], True)
+        feature = self.parse_audio(self.audio_paths[idx], 0)
+        #feature, transcript, feature_len = self.datas[idx]
 
         if feature is None:
             return None

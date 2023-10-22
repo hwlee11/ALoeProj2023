@@ -534,6 +534,7 @@ class AttentionEncoderDecoder(torch.nn.Module):
         # y [B, T]
 
         x, x_lengths = self.pre_encode(x,x_lengths)
+        #h, h_mask = self.encoder(x, x_lengths)
         h, h_mask, ctc_out = self.encoder(x, x_lengths)
 
         # cat sos tokens
@@ -542,13 +543,18 @@ class AttentionEncoderDecoder(torch.nn.Module):
 
         # text decoder
         out, out_mask = self.decoder(y[:,:-1], y_lengths , h, h_mask)
+        #del sosTensor
+
         return out, out_mask, ctc_out, x_lengths
+        #return out, out_mask, x_lengths
 
     @torch.no_grad()
     def encoder_forward(self, x, x_lengths):
 
         x, x_lengths = self.pre_encode(x,x_lengths)
+        #h, h_mask = self.encoder(x, x_lengths)
         h, h_mask, ctc_out = self.encoder(x, x_lengths)
+        #del ctc_out
         return h, h_mask
 
     @torch.no_grad()

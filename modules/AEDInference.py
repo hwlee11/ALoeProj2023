@@ -162,7 +162,8 @@ def beamSearch(model, beam, beamSize, h, h_mask, device, sos=1, eos=2):
     h = h.repeat_interleave(beamSize,dim=0)
     h_mask = h_mask.repeat_interleave(beamSize, dim=0)
 
-    while True:
+    #while True:
+    for i in range(200):
         logits, out_mask = model.module.decode_one_step(tokens, token_lengths, h, h_mask)
         tokens, completed = beam.update(tokens, logits, token_lengths, sum_logprobs)
         if completed :
@@ -190,7 +191,8 @@ def batch_greedy_scoring(model, h, h_mask, device, sos=1, eos=2):
     batchSize, _, _ = h.size()
     tokens = torch.tensor([[sos]] * batchSize).to(device)
     token_lengths = torch.tensor([1]*batchSize).to(device)
-    while True:
+    #while True:
+    for i in range(200):
         out, out_mask = model.module.decode_one_step(tokens, token_lengths, h, h_mask)
         #print('out mask',out_mask.size())
         next_token = out[:,:,-1:].argmax(dim=1)
@@ -280,14 +282,17 @@ def test_infer(model, testLoader, tokenizer):
     results = list()
     beamSize = 2
     beam = BeamSearchDecoder(beamSize, eot=2)
+    #print('batchs len',len(testLoader))
     for features, input_lengths, paths in testLoader:
         s = time.time()
         #print(features.size(),paths)
         outputs, output_mask = model.module.encoder_forward(features.to('cuda'), input_lengths.to('cuda'))
-        #sentence = batch_greedy_scoring(model, outputs, output_mask, device='cuda').cpu().numpy()
+        sentence = batch_greedy_scoring(model, outputs, output_mask, device='cuda').cpu().numpy()
         #sentence = batch_beam_scoring(model, outputs, output_lengths, device='cuda').cpu().numpy()
-        sentence = beamSearch(model, beam, beamSize, outputs, output_mask, device='cuda').cpu().numpy()
+        #sentence = beamSearch(model, beam, beamSize, outputs, output_mask, device='cuda').cpu().numpy()
+        #del outputs, output_mask
         for i in range(len(sentence)):
+            #text = tokenizer.ids_to_text(sentence[i][1:input_lengths[i].item()])
             text = tokenizer.label_to_string(sentence[i][1:input_lengths[i].item()])
             #print(text)
             results.append(
@@ -296,6 +301,7 @@ def test_infer(model, testLoader, tokenizer):
                     'text' : text
                 }
             )
+        torch.cuda.empty_cache()
         t = time.time()
         #print(t-s)
 

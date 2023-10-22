@@ -138,12 +138,16 @@ def preprocessing(transcripts_dest, labels_dest):
 
     print('[INFO] Preprocessing is Done')
 
-def preprocessing_spe(transcripts_dest, labels_dest):
+def get_spe():
+
+    spe_model = SentencePieceTokenizer(os.path.join(os.getcwd(),'temp/tokenizer_spe_unigram_v5000_bos_eos/tokenizer.model'))
+    return spe_model
+
+def preprocessing_spe(spe_model, transcripts_dest, labels_dest):
     transcript_df = pd.read_csv(transcripts_dest)
     generate_script(transcript_df, labels_dest)
     # build spe
-    build_spe_model(labels_dest,'alltext.txt')
-    spe_model = SentencePieceTokenizer(os.path.join(os.getcwd(),'tokenizer_spe_unigram_v5000_bos_eos/tokenizer.model'))
+    #build_spe_model(labels_dest,'alltext.txt')
     generate_spe_script_pd(transcript_df, spe_model)
 
     print('[INFO] Preprocessing is Done')
@@ -197,7 +201,7 @@ def preprocessing_test(transcripts_dest, labels_dest):
     data_dict = json_parse(transcripts_dest)
     
     # build spe
-    build_spe_model('/workspace/ALoeProj2023/temp','./text.txt')
+    #build_spe_model('/workspace/ALoeProj2023/temp','./text.txt')
     spe_model = SentencePieceTokenizer(os.path.join(os.getcwd(),'temp/tokenizer_spe_unigram_v5000_bos_eos/tokenizer.model'))
     generate_spe_script_dict(data_dict, spe_model)
     # gen label script

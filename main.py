@@ -8,7 +8,7 @@ import json
 import argparse
 from glob import glob
 
-from modules.preprocess import preprocessing_spe
+from modules.preprocess import preprocessing_spe, get_spe
 from modules.preprocess import preprocessing
 from modules.trainer import trainer
 from modules.utils import (
@@ -67,8 +67,8 @@ def inference(path, model, config, tokenizer, **kwargs):
     test_set = testDataset(test_datas, config)
     test_loader = DataLoader(
                 test_set,
-                batch_size=64,
-                shuffle=True,
+                batch_size=32,
+                shuffle=False,
                 collate_fn=collate_test_fn,
                 num_workers=8
     )
@@ -92,11 +92,11 @@ if __name__ == '__main__':
     args.add_argument('--use_cuda', type=bool, default=True)
     args.add_argument('--seed', type=int, default=777)
     args.add_argument('--num_epochs', type=int, default=30)
-    args.add_argument('--batch_size', type=int, default=196)
+    args.add_argument('--batch_size', type=int, default=192)
     #args.add_argument('--batch_size', type=int, default=128)
     args.add_argument('--save_result_every', type=int, default=10)
     args.add_argument('--checkpoint_every', type=int, default=1)
-    args.add_argument('--print_every', type=int, default=100)
+    args.add_argument('--print_every', type=int, default=500)
     args.add_argument('--dataset', type=str, default='kspon')
     args.add_argument('--output_unit', type=str, default='character')
     args.add_argument('--num_workers', type=int, default=16)
@@ -154,13 +154,22 @@ if __name__ == '__main__':
         torch.set_num_threads(config.num_threads)
 
     tokenizer = KoreanSpeechVocabulary(os.path.join(os.getcwd(), 'labels.csv'), output_unit='character')
-    #tokenizer = preprocessing_spe(label_path, os.getcwd())
-    # build AED model
     vocab_size = len(tokenizer) # 
+    blank_id = tokenizer.blank_id
     model = build_model(config, vocab_size, device)
     print(model)
-    print(vocab_size, tokenizer.blank_id)
+    print(vocab_size, blank_id)
+
+    """
+    tokenizer = get_spe()#preprocessing_spe(, os.getcwd())
+    # build AED model
+    vocab_size = 5000 + 1 #len(tokenizer) # 
+    blank_id = 5000
+    model = build_model(config, vocab_size, device)
+    print(model)
+    print(vocab_size, blank_id)
     #model = build_model(config, vocab_size, device)
+    """
     optimizer = get_optimizer(model, config)
     bind_model(model, config, tokenizer,optimizer=optimizer)
     metric = get_metric(metric_name='CER', vocab=tokenizer)
@@ -174,6 +183,7 @@ if __name__ == '__main__':
         config.dataset_path = os.path.join(DATASET_PATH, 'train', 'train_data')
         label_path = os.path.join(DATASET_PATH, 'train', 'train_label')
         preprocessing(label_path, os.getcwd())
+        #preprocessing_spe(tokenizer, label_path, os.getcwd())
         # data preprocessing and build tokenizer
         #vocab_size = len(tokenizer.vocab)
     
@@ -183,7 +193,7 @@ if __name__ == '__main__':
         lr_scheduler = get_lr_scheduler(config, optimizer, len(train_dataset))
         optimizer = Optimizer(optimizer, None, None, config.max_grad_norm)
         #optimizer = Optimizer(optimizer, lr_scheduler, int(len(train_dataset)*config.num_epochs), config.max_grad_norm)
-        ctc, nll = get_criterion(config, tokenizer)
+        ctc, nll = get_criterion(config, blank_id)
 
         num_epochs = config.num_epochs
         num_workers = config.num_workers
@@ -205,8 +215,8 @@ if __name__ == '__main__':
                 num_workers=config.num_workers
         )
 
-        #init_lr = 1e-3
-        #optimizer.set_lr(init_lr)
+        init_lr = 1e-3
+        optimizer.set_lr(init_lr)
         #lr = init_lr
 
         for epoch in range(num_epochs):
@@ -214,6 +224,8 @@ if __name__ == '__main__':
 
             # train
             
+            if epoch == 4:
+                optimizer.count = 3700
 
             model.train()
             model, train_loss, train_cer = trainer(

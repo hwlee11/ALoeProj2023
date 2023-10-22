@@ -71,10 +71,10 @@ def trainer(epoch, mode, config, dataloader, optimizer, model, ctc, nll, metric,
     for inputs, targets, input_lengths, target_lengths in dataloader:
         begin_time = time.time()
         
-        #if epoch < 10:
-        numOfStep = optimizer.count #.optimizer.state#[optimizer.optimizer.param_groups[0]["params"]]#[-1]] #["step"]
-        lr = learningRateScheduler(256,numOfStep,3700)
-        optimizer.set_lr(lr)
+        if epoch > 3:
+            numOfStep = optimizer.count #.optimizer.state#[optimizer.optimizer.param_groups[0]["params"]]#[-1]] #["step"]
+            lr = learningRateScheduler(256,numOfStep,3700)
+            optimizer.set_lr(lr)
         optimizer.zero_grad()
         inputs = inputs.to(device)
         targets = targets.to(device)
@@ -83,20 +83,24 @@ def trainer(epoch, mode, config, dataloader, optimizer, model, ctc, nll, metric,
         model = model.to(device)
 
         if mode == 'train':
+            #outputs, output_mask, output_lengths = model(inputs, input_lengths, targets, target_lengths, device)
             outputs, output_mask, ctc_outputs, output_lengths = model(inputs, input_lengths, targets, target_lengths, device)
             logp = torch.nn.functional.log_softmax(outputs,dim=1).transpose(1,2)#.squeeze(-1) # [B, T, D]
 
+            #loss = nll(
             nllloss = nll(
                 logp,
                 targets,
                 output_mask
             )
+            
             ctcloss = ctc(
                 ctc_outputs.transpose(1,2).transpose(0,1),
                 targets,
                 tuple(output_lengths),
                 tuple(target_lengths)
             )
+            
             loss = (0.2 * ctcloss) + (0.8 * nllloss)
             #print(logp.size()) # [B , T , D]
             y_hats = logp.max(2)[1]
@@ -133,12 +137,15 @@ def trainer(epoch, mode, config, dataloader, optimizer, model, ctc, nll, metric,
                 sum_cer+=cer
             cer = sum_cer/len(y_hats)
             print('label',tokenizer.label_to_string(targets[0]),':','predict',tokenizer.label_to_string(y_hats[0][:target_lengths[0].item()]))
-            #print('label',tokenizer.ids_to_text(targets[0].tolist()),':','predict',tokenizer.ids_to_text(y_hats[0].tolist()))
+            print('label',tokenizer.label_to_string(targets[1]),':','predict',tokenizer.label_to_string(y_hats[1][:target_lengths[1].item()]))
+            print('label',tokenizer.label_to_string(targets[2]),':','predict',tokenizer.label_to_string(y_hats[2][:target_lengths[2].item()]))
+            #print('label',tokenizer.ids_to_text(targets[0].tolist()[:target_lengths[0].item()]),'\n','predict',tokenizer.ids_to_text(y_hats[0].tolist()[:target_lengths[0].item()]) )
             print(log_format.format(
                 cnt, len(dataloader), loss,
                 cer, elapsed, epoch_elapsed, train_elapsed,
                 optimizer.get_lr(),
             ))
+            del y_hats
         #if cnt == 5:
         #    break
         cnt += 1
