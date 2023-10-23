@@ -22,6 +22,72 @@ from modules.audio.core import load_audio
 from modules.audio.parser import SpectrogramParser
 
 
+class textDataset(Dataset):
+    """
+    Dataset for feature & transcript matching
+
+    Args:
+        audio_paths (list): list of audio path
+        transcripts (list): list of transcript
+        sos_id (int): identification of <start of sequence>
+        eos_id (int): identification of <end of sequence>
+        spec_augment (bool): flag indication whether to use spec-augmentation or not (default: True)
+        config (DictConfig): set of configurations
+        dataset_path (str): path of dataset
+    """
+
+    def __init__(self, text_list):
+        #self.tokenizer = tokenizer
+        self.text_list = text_list
+        self.readData()
+        self.shuffle()
+        #self.dataset_size = len(self.text_path)
+
+    def parse_transcript(self, transcript):
+        """ Parses transcript """
+        tokens = transcript.split(' ')
+        transcript = list()
+
+        #transcript.append(int(self.sos_id))
+        for token in tokens:
+            try:
+                transcript.append(int(token))
+                status='nor'
+            except:
+                print(tokens)
+                status='err'
+        transcript.append(2)
+
+        return transcript, status
+
+    def readData(self,):
+        #f = open(self.text_path)
+        self.dataset = list()
+        for ids in self.text_list:
+            ids, _ = self.parse_transcript(ids)
+            self.dataset.append(ids)
+
+        #f.close()
+
+    def __getitem__(self, idx):
+        """ get feature vector & transcript """
+
+        transcript = self.dataset[idx]
+
+        return transcript
+
+    def shuffle(self):
+        """ Shuffle dataset """
+        #tmp = list(zip(self.audio_paths, self.transcripts, self.augment_methods))
+        random.shuffle(self.dataset)
+        #self.audio_paths, self.transcripts, self.augment_methods = zip(*tmp)
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def count(self):
+        return len(self.dataset)
+
 class testDataset(Dataset, SpectrogramParser):
     """
     Dataset for feature & transcript matching
@@ -236,6 +302,72 @@ def load_dataset(transcripts_path):
 
     return audio_paths, transcripts
 
+def readTextData(text_path):
+    f = open(text_path)
+    dataset = list()
+    while True:
+        line = f.readline()
+        if line == "":
+            break
+        line  = line.rstrip()
+        try:
+            t, i = line.split('\t')
+        except ValueError:
+            continue
+        dataset.append(i)
+    f.close()
+    return dataset
+
+
+def split_text_dataset(transcripts_path: str, sos_id=1, eos_id=2, valid_size=.10):
+    """
+    split into training set and validation set.
+
+    Args:
+        opt (ArgumentParser): set of options
+        transcripts_path (str): path of  transcripts
+
+    Returns: train_batch_num, train_dataset_list, valid_dataset
+        - **train_time_step** (int): number of time step for training
+        - **trainset_list** (list): list of training dataset
+        - **validset** (data_loader.MelSpectrogramDataset): validation dataset
+    """
+
+    print("split dataset start !!")
+    trainset_list = list()
+    validset_list = list()
+
+    transcripts = readTextData(transcripts_path)
+
+    random.shuffle(transcripts)
+
+    train_list = transcripts[:int(0.8*len(transcripts))] 
+    val_list = transcripts[int(0.8*len(transcripts)):int(0.9*len(transcripts))] 
+    test_list = transcripts[int(-0.1*len(transcripts)):] 
+
+
+    # audio_paths & script_paths shuffled in the same order
+    # for seperating train & validation
+    #tmp = list(zip(train_audio_paths, train_transcripts))
+    #random.shuffle(tmp)
+    #train_audio_paths, train_transcripts = zip(*tmp)
+
+    # seperating the train dataset by the number of workers
+
+    train_dataset = textDataset(
+        train_list
+    )
+
+    valid_dataset = textDataset(
+        val_list
+    )
+
+    test_dataset = textDataset(
+        test_list
+    )
+
+    return train_dataset, valid_dataset, test_dataset
+
 
 def split_dataset(config, transcripts_path: str, sos_id=1, eos_id=2, valid_size=.10):
     """
@@ -385,3 +517,54 @@ def collate_test_fn(batch):
         return seqs, seq_lengths, targets
     except Exception as e:
         print(e)
+
+def collate_text_fn(batch):
+    pad_id = 0
+    """ functions that pad to the maximum sequence length """
+
+    def seq_length_(p):
+        return len(p)
+
+    def target_length_(p):
+        return len(p[1])
+
+    # sort by sequence length for rnn.pack_padded_sequence()
+    #try:
+    batch = [i for i in batch if i != None]
+    #batch = sorted(batch, key=lambda sample: sample[0].size(0), reverse=True)
+
+    seq_lengths = [len(s) for s in batch]
+    #target_lengths = [len(s[1]) for s in batch]
+
+    max_seq_sample = max(batch, key=seq_length_)
+    #max_target_sample = max(batch, key=target_length_)[1]
+
+    max_seq_size = len(max_seq_sample)
+    #max_target_size = len(max_target_sample)
+
+    #feat_size = max_seq_sample.size(1)
+    batch_size = len(batch)
+
+    seqs = torch.zeros(batch_size, max_seq_size).to(torch.long)
+    targets = torch.zeros(batch_size, max_seq_size).to(torch.long)
+    #targets = list()
+    seqs.fill_(pad_id)
+    targets.fill_(pad_id)
+
+    for x in range(batch_size):
+        target = batch[x]
+        tensor = torch.tensor(target).to(torch.int64)
+        seq_length = tensor.size(0)
+        targets[x].narrow(0, 0, seq_length).copy_(tensor)
+
+        data = batch[x][:-1]
+        data.insert(0,1)
+        tensor = torch.tensor(data).to(torch.int64)
+        seq_length = tensor.size(0)
+
+        seqs[x].narrow(0, 0, seq_length).copy_(tensor)
+        #targets.append(target)
+
+    seq_lengths = torch.IntTensor(seq_lengths)
+
+    return seqs, seq_lengths, targets
